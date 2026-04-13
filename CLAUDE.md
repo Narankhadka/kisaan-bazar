@@ -216,9 +216,7 @@ KALIMATI_URL=https://www.kalimatimarket.com.np
 6. **Pagination** — all list APIs must have pagination (20 items/page)
 7. **Filtering** — price APIs must support ?crop=, ?date=, ?district=
 8. **Soft delete** — use is_active=False instead of actual delete
-9. **Timestamps** — every model must have created_at, updated_at
-
----
+9. **Timestamps** — 
 
 ## Current Phase: Phase 1 — Backend Setup
 
