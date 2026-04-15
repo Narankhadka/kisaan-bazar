@@ -17,6 +17,7 @@ CSRF_COOKIE_SECURE = True
 
 # CORS — only allow the production frontend
 CORS_ALLOWED_ORIGINS = env.list("CORS_ALLOWED_ORIGINS", default=[])  # noqa: F405
+CORS_ALLOW_CREDENTIALS = True
 
 # Use real SMTP in production
 EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"

@@ -1,45 +1,61 @@
 import { createContext, useContext, useState, useEffect } from 'react';
-import api from '../api/axios';
+import axios from 'axios';
+import api, { setAccessToken, clearAccessToken } from '../api/axios';
 
 const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(null);
+  const [user, setUser]       = useState(null);
   const [loading, setLoading] = useState(true);
 
+  // On mount: try to restore the session via the httpOnly refresh cookie.
+  // No token in localStorage — the cookie is sent automatically.
+  // 401 here is NORMAL for guests — we just set user = null and continue.
   useEffect(() => {
-    const token = localStorage.getItem('access_token');
-    if (token) {
-      api.get('/auth/me/')
-        .then(({ data }) => setUser(data))
-        .catch(() => {
-          localStorage.removeItem('access_token');
-          localStorage.removeItem('refresh_token');
-        })
-        .finally(() => setLoading(false));
-    } else {
-      setLoading(false);
-    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data: refreshData } = await axios.post(
+          '/api/auth/refresh/',
+          {},
+          { withCredentials: true }
+        );
+        setAccessToken(refreshData.access);
+        const { data: meData } = await api.get('/auth/me/');
+        if (!cancelled) setUser(meData);
+      } catch {
+        // 401 = not logged in (expected on public pages), network error, etc.
+        clearAccessToken();
+        if (!cancelled) setUser(null);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
   }, []);
 
   const login = async (username, password) => {
     const { data } = await api.post('/auth/login/', { username, password });
-    localStorage.setItem('access_token', data.access);
-    localStorage.setItem('refresh_token', data.refresh);
+    // access token in body; refresh token set as httpOnly cookie by server
+    setAccessToken(data.access);
     const me = await api.get('/auth/me/');
     setUser(me.data);
     return me.data;
   };
 
-  const logout = () => {
-    localStorage.removeItem('access_token');
-    localStorage.removeItem('refresh_token');
+  const logout = async () => {
+    try {
+      await api.post('/auth/logout/');   // blacklists refresh token + clears cookie
+    } catch {
+      // Continue regardless — clear local state
+    }
+    clearAccessToken();
     setUser(null);
   };
 
-  const register = async (formData) => {
+  const register = async (formData, username, password) => {
     await api.post('/auth/register/', formData);
-    return login(formData.username, formData.password);
+    return login(username, password);
   };
 
   return (

@@ -4,7 +4,6 @@ import api from '../api/axios';
 import PriceCard from '../components/PriceCard';
 import ListingCard from '../components/ListingCard';
 import OrderModal from '../components/OrderModal';
-import Spinner from '../components/Spinner';
 import { matchesCrop, toNepaliNum } from '../utils/searchUtils';
 import { useLanguage } from '../context/LanguageContext';
 
@@ -26,6 +25,8 @@ export default function HomePage() {
   const [listings, setListings]         = useState([]);
   const [loadingP, setLoadingP]         = useState(true);
   const [loadingL, setLoadingL]         = useState(true);
+  const [errorP, setErrorP]             = useState(false);
+  const [errorL, setErrorL]             = useState(false);
   const [search, setSearch]             = useState('');
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [orderListing, setOrderListing] = useState(null);
@@ -36,8 +37,14 @@ export default function HomePage() {
   const wrapperRef = useRef(null);
 
   useEffect(() => {
-    api.get('/prices/today/').then(({ data }) => setPrices(data.results || [])).finally(() => setLoadingP(false));
-    api.get('/listings/').then(({ data }) => setListings(data.results || [])).finally(() => setLoadingL(false));
+    api.get('/prices/today/')
+      .then(({ data }) => setPrices(data.results || []))
+      .catch(() => setErrorP(true))
+      .finally(() => setLoadingP(false));
+    api.get('/listings/')
+      .then(({ data }) => setListings(data.results || []))
+      .catch(() => setErrorL(true))
+      .finally(() => setLoadingL(false));
   }, []);
 
   // "/" keyboard shortcut — focus search bar
@@ -353,7 +360,27 @@ export default function HomePage() {
             </div>
 
             {loadingP ? (
-              <Spinner />
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                {[...Array(8)].map((_, i) => (
+                  <div key={i} className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 flex flex-col gap-2">
+                    <div className="skeleton w-12 h-12 rounded-full mx-auto" />
+                    <div className="skeleton h-4 w-3/4 mx-auto" />
+                    <div className="skeleton h-3 w-1/2 mx-auto" />
+                    <div className="skeleton h-5 w-2/3 mx-auto mt-1" />
+                  </div>
+                ))}
+              </div>
+            ) : errorP ? (
+              <div className="text-center py-12 text-gray-400">
+                <div className="text-4xl mb-3">⚠️</div>
+                <p className="font-medium text-gray-600">सर्भर समस्या भयो</p>
+                <button
+                  onClick={() => { setErrorP(false); setLoadingP(true); api.get('/prices/today/').then(({ data }) => setPrices(data.results || [])).catch(() => setErrorP(true)).finally(() => setLoadingP(false)); }}
+                  className="mt-3 text-xs px-4 py-2 rounded-full border border-gray-300 hover:border-green-600 hover:text-green-700 transition-colors cursor-pointer"
+                >
+                  पुन: प्रयास गर्नुस्
+                </button>
+              </div>
             ) : filteredPrices.length === 0 && search.trim() ? (
               <div className="text-center py-12 text-gray-400">
                 <div className="text-5xl mb-3">🔍</div>
@@ -396,7 +423,31 @@ export default function HomePage() {
                 {t('view_all')}
               </Link>
             </div>
-            {loadingL ? <Spinner /> : listings.length === 0 ? (
+            {loadingL ? (
+              <div className="grid grid-cols-2 md:grid-cols-1 gap-3">
+                {[...Array(4)].map((_, i) => (
+                  <div key={i} className="bg-white rounded-2xl overflow-hidden shadow-sm border border-gray-100">
+                    <div className="skeleton w-full h-36" style={{ borderRadius: 0 }} />
+                    <div className="p-3 flex flex-col gap-2">
+                      <div className="skeleton h-4 w-3/4" />
+                      <div className="skeleton h-3 w-1/2" />
+                      <div className="skeleton h-8 w-full mt-1" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : errorL ? (
+              <div className="text-center py-12 text-gray-400">
+                <div className="text-4xl mb-3">⚠️</div>
+                <p className="font-medium text-gray-600">सर्भर समस्या भयो</p>
+                <button
+                  onClick={() => { setErrorL(false); setLoadingL(true); api.get('/listings/').then(({ data }) => setListings(data.results || [])).catch(() => setErrorL(true)).finally(() => setLoadingL(false)); }}
+                  className="mt-3 text-xs px-4 py-2 rounded-full border border-gray-300 hover:border-green-600 hover:text-green-700 transition-colors cursor-pointer"
+                >
+                  पुन: प्रयास गर्नुस्
+                </button>
+              </div>
+            ) : listings.length === 0 ? (
               <p className="text-gray-400 text-sm text-center py-6">{t('home.no_listings')}</p>
             ) : (
               <div className="grid grid-cols-2 md:grid-cols-1 gap-3">

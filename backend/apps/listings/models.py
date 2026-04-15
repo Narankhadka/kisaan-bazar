@@ -24,3 +24,19 @@ class Listing(models.Model):
 
     def __str__(self):
         return f"{self.farmer.username} — {self.crop.name_nepali} ({self.quantity_kg} kg)"
+
+
+class SavedListing(models.Model):
+    buyer = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
+        related_name="saved_listings", limit_choices_to={"role": "BUYER"}
+    )
+    listing = models.ForeignKey(Listing, on_delete=models.CASCADE, related_name="saved_by")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ("buyer", "listing")
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.buyer.username} saved {self.listing}"

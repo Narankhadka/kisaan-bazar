@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import api from '../api/axios';
 import { useAuth } from '../context/AuthContext';
 import { DISTRICTS_BY_PROVINCE } from '../data/districts';
+import { stripHtml } from '../utils/searchUtils';
 
 const INPUT = 'w-full border border-gray-300 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-green-600 focus:ring-2 focus:ring-green-100 transition-colors';
 
@@ -123,7 +124,7 @@ export default function NewListingPage() {
           <label className="block text-sm font-medium text-gray-700 mb-1.5">विवरण (ऐच्छिक)</label>
           <textarea
             value={form.description}
-            onChange={e => set('description', e.target.value)}
+            onChange={e => set('description', stripHtml(e.target.value))}
             rows={3}
             placeholder="बालीको बारेमा थप जानकारी..."
             className={INPUT + ' resize-none'}

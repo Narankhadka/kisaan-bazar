@@ -85,8 +85,24 @@ export function matchesCrop(price, query) {
   return false;
 }
 
+/**
+ * If the query exactly matches a romanized key (e.g. "potato", "aalu"),
+ * return its Nepali equivalent ("आलु"). Otherwise return the original query
+ * so Nepali text passes straight through to the API.
+ */
+export function translateToNepali(query) {
+  if (!query) return '';
+  const q = query.trim().toLowerCase();
+  return TRANSLITERATION[q] || query.trim();
+}
+
 /** Converts an Arabic-numeral number to Nepali Devanagari numerals. */
 export function toNepaliNum(n) {
   const digits = ['०', '१', '२', '३', '४', '५', '६', '७', '८', '९'];
   return String(n).replace(/\d/g, d => digits[+d]);
+}
+
+/** Strip HTML tags from user-supplied text to prevent XSS injection. */
+export function stripHtml(str) {
+  return String(str).replace(/<[^>]*>/g, '');
 }

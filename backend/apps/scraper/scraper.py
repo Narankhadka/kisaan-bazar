@@ -7,7 +7,6 @@ import logging
 import re
 from decimal import Decimal, InvalidOperation
 
-import requests
 from bs4 import BeautifulSoup
 from django.conf import settings
 from django.core.mail import mail_admins
@@ -79,27 +78,17 @@ def _best_crop_match(scraped_name: str, crops):
 # Fetch & parse
 # ---------------------------------------------------------------------------
 
-def fetch_raw_prices():
+def _parse_price_table(html_content: str) -> list:
     """
-    Download the Kalimati homepage and parse the price table.
+    Parse the Kalimati price table from raw HTML.
 
     Table id: commodityDailyPrice
     Columns:  कृषि उपज | न्यूनतम | अधिकतम | औसत
 
     Returns list of dicts: {name, unit, min_price, max_price}.
-    Raises requests.RequestException or ValueError on failure.
+    Raises ValueError if the table is not found.
     """
-    headers = {
-        "User-Agent": (
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) "
-            "Chrome/120.0.0.0 Safari/537.36"
-        )
-    }
-    response = requests.get(settings.KALIMATI_URL, headers=headers, timeout=30)
-    response.raise_for_status()
-
-    soup = BeautifulSoup(response.content, "html.parser")
+    soup = BeautifulSoup(html_content, "html.parser")
     table = soup.find("table", {"id": "commodityDailyPrice"})
     if not table:
         raise ValueError(
@@ -139,6 +128,73 @@ def fetch_raw_prices():
 
     logger.info("Fetched %d raw price rows from Kalimati", len(rows))
     return rows
+
+
+def fetch_raw_prices():
+    """
+    Download the Kalimati homepage using a headless browser (Playwright) and
+    parse the price table.
+
+    The site uses Imunify360 bot-protection which requires JavaScript execution
+    to solve before the real content is served. Playwright's Chromium handles
+    this transparently.
+
+    Returns list of dicts: {name, unit, min_price, max_price}.
+    Raises ImportError, ValueError or playwright.TimeoutError on failure.
+    """
+    try:
+        from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeout
+    except ImportError:
+        raise ImportError(
+            "playwright is not installed. Run: "
+            "pip install playwright && playwright install chromium"
+        )
+
+    url = settings.KALIMATI_URL
+    logger.info("Launching headless browser to fetch %s", url)
+
+    with sync_playwright() as p:
+        browser = p.chromium.launch(
+            headless=True,
+            # Prevent Chrome from exposing automation flags
+            args=["--disable-blink-features=AutomationControlled"],
+        )
+        context = browser.new_context(
+            # Use a real desktop Chrome UA so Imunify360 headless check passes
+            user_agent=(
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/124.0.0.0 Safari/537.36"
+            ),
+            viewport={"width": 1280, "height": 800},
+            locale="ne-NP",
+        )
+        page = context.new_page()
+
+        try:
+            page.goto(url, wait_until="domcontentloaded", timeout=30_000)
+            # The Imunify360 challenge auto-solves and reloads the real page.
+            # Wait until the actual price table appears (up to 30 s).
+            page.wait_for_selector(
+                "table#commodityDailyPrice", timeout=30_000
+            )
+            logger.info("Price table found — challenge solved successfully")
+        except PlaywrightTimeout:
+            # Capture whatever page we have for diagnostic logging
+            title = page.title()
+            logger.error(
+                "Timed out waiting for price table. Page title: '%s'", title
+            )
+            raise ValueError(
+                f"Price table (id=commodityDailyPrice) not found after 30 s. "
+                f"Page title was: '{title}'. "
+                f"The site may have changed layout or bot-protection is blocking us."
+            )
+        finally:
+            html_content = page.content()
+            browser.close()
+
+    return _parse_price_table(html_content)
 
 
 # ---------------------------------------------------------------------------

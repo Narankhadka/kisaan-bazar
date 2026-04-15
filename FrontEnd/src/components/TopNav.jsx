@@ -20,7 +20,7 @@ export default function TopNav() {
     <nav className="hidden md:flex items-center justify-between px-8 py-4 bg-white border-b border-gray-200 shadow-sm sticky top-0 z-50">
       {/* Logo */}
       <Link to="/" className="flex items-center gap-2 shrink-0">
-        <span className="text-2xl">🌾</span>
+        <span className="text-3xl leading-none" style={{ filter: 'sepia(1) saturate(2) hue-rotate(5deg)' }}>🌾</span>
         <span className="text-lg font-bold tracking-wide" style={{ color: GREEN }}>{t('app.name')}</span>
       </Link>
 
@@ -65,12 +65,36 @@ export default function TopNav() {
         {user ? (
           <>
             {user.role === 'FARMER' && (
+              <>
+                <Link
+                  to="/dashboard"
+                  className="text-sm font-medium transition-colors hover:opacity-80 pb-0.5"
+                  style={{
+                    color: pathname === '/dashboard' ? GREEN : '#374151',
+                    borderBottom: pathname === '/dashboard' ? `2px solid ${GREEN}` : '2px solid transparent',
+                  }}
+                >
+                  {t('dash.farmer_title')}
+                </Link>
+                <Link
+                  to="/listings/new"
+                  className="text-sm px-4 py-2 rounded-full text-white font-medium transition-opacity hover:opacity-90"
+                  style={{ backgroundColor: ORANGE }}
+                >
+                  {t('nav.add_crop')}
+                </Link>
+              </>
+            )}
+            {user.role === 'BUYER' && (
               <Link
-                to="/listings/new"
-                className="text-sm px-4 py-2 rounded-full text-white font-medium transition-opacity hover:opacity-90"
-                style={{ backgroundColor: ORANGE }}
+                to="/buyer-dashboard"
+                className="text-sm font-medium transition-colors hover:opacity-80 pb-0.5"
+                style={{
+                  color: pathname === '/buyer-dashboard' ? ORANGE : '#374151',
+                  borderBottom: pathname === '/buyer-dashboard' ? `2px solid ${ORANGE}` : '2px solid transparent',
+                }}
               >
-                {t('nav.add_crop')}
+                {t('dash.buyer_title')}
               </Link>
             )}
             <Link

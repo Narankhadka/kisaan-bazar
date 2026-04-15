@@ -25,6 +25,10 @@ class TodayPriceListView(generics.ListAPIView):
         if crop:
             qs = qs.filter(crop__name_nepali__icontains=crop)
 
+        category = self.request.query_params.get("category")
+        if category:
+            qs = qs.filter(crop__category=category.upper())
+
         return qs
 
 

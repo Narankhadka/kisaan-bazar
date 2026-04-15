@@ -2,12 +2,12 @@ import { useState, useEffect } from 'react';
 import api from '../api/axios';
 import ListingCard from '../components/ListingCard';
 import OrderModal from '../components/OrderModal';
-import Spinner from '../components/Spinner';
 import { ALL_DISTRICTS } from '../data/districts';
 
 export default function ListingsPage() {
   const [listings, setListings]     = useState([]);
   const [loading, setLoading]       = useState(true);
+  const [error, setError]           = useState(false);
   const [district, setDistrict]     = useState('');
   const [cropQ, setCropQ]           = useState('');
   const [search, setSearch]         = useState('');
@@ -16,9 +16,10 @@ export default function ListingsPage() {
   const [page, setPage]             = useState(1);
   const [hasNext, setHasNext]       = useState(false);
 
-  const fetchListings = (reset = false) => {
-    const p = reset ? 1 : page;
+  const fetchListings = (reset = false, nextPage = null) => {
+    const p = reset ? 1 : (nextPage ?? page);
     setLoading(true);
+    setError(false);
     const params = { page: p };
     if (district) params.district = district;
     if (search)   params.crop     = search;
@@ -27,7 +28,9 @@ export default function ListingsPage() {
         setListings(prev => reset ? (data.results || []) : [...prev, ...(data.results || [])]);
         setHasNext(!!data.next);
         if (reset) setPage(1);
+        else setPage(p);
       })
+      .catch(() => setError(true))
       .finally(() => setLoading(false));
   };
 
@@ -42,8 +45,7 @@ export default function ListingsPage() {
   const handleClose  = (ok) => { setOrderListing(null); if (ok) setSuccess(true); };
 
   const loadMore = () => {
-    setPage(p => p + 1);
-    fetchListings(false);
+    fetchListings(false, page + 1);
   };
 
   return (
@@ -96,7 +98,33 @@ export default function ListingsPage() {
       </div>
 
       <div className="max-w-screen-xl mx-auto px-4 md:px-8 pt-4">
-        {loading && listings.length === 0 ? <Spinner /> : listings.length === 0 ? (
+        {loading && listings.length === 0 ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 pt-4">
+            {[...Array(6)].map((_, i) => (
+              <div key={i} className="bg-white rounded-2xl overflow-hidden shadow-sm border border-gray-100">
+                <div className="skeleton w-full h-36" style={{ borderRadius: 0 }} />
+                <div className="p-3 flex flex-col gap-2">
+                  <div className="skeleton h-4 w-3/4" />
+                  <div className="skeleton h-3 w-1/2" />
+                  <div className="skeleton h-8 w-full mt-1" />
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : error ? (
+          <div className="text-center py-16 text-gray-400">
+            <div className="text-4xl mb-3">⚠️</div>
+            <p className="font-medium text-gray-600">सर्भर समस्या भयो</p>
+            <p className="text-sm mt-1">इन्टरनेट जडान जाँच गर्नुस् र पुन: प्रयास गर्नुस्।</p>
+            <button
+              onClick={() => fetchListings(true)}
+              className="mt-4 text-sm px-5 py-2.5 rounded-xl font-medium text-white cursor-pointer hover:opacity-90 transition-opacity"
+              style={{ backgroundColor: '#1a6b2e', minHeight: '44px' }}
+            >
+              पुन: प्रयास गर्नुस्
+            </button>
+          </div>
+        ) : listings.length === 0 ? (
           <div className="text-center py-16 text-gray-400">
             <div className="text-4xl mb-3">🌱</div>
             <p>हाल कुनै बाली उपलब्ध छैन।</p>
@@ -112,7 +140,7 @@ export default function ListingsPage() {
               <button
                 onClick={loadMore}
                 disabled={loading}
-                className="w-full mt-4 py-3 rounded-2xl border text-sm font-medium text-gray-600 bg-white disabled:opacity-50 hover:border-green-600 hover:text-green-700 transition-colors"
+                className="w-full mt-4 py-3 rounded-2xl border text-sm font-medium text-gray-600 bg-white disabled:opacity-50 hover:border-green-600 hover:text-green-700 transition-colors cursor-pointer min-h-[44px]"
               >
                 {loading ? 'लोड हुँदै...' : 'थप हेर्नुस्'}
               </button>

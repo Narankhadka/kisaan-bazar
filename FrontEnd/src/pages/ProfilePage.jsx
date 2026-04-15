@@ -111,7 +111,7 @@ function AlertSection({ crops }) {
           {alerts.map(a => (
             <div key={a.id} className="bg-white rounded-2xl p-3 flex items-center justify-between border border-gray-100">
               <div>
-                <span className="font-medium text-sm">{a.crop_name || a.crop}</span>
+                <span className="font-medium text-sm">{a.crop_detail?.name_nepali || a.crop}</span>
                 <div className="text-xs text-gray-500">
                   {a.condition === 'BELOW' ? '▼' : '▲'} रु.{a.threshold_price}
                   {a.via_sms && <span className="ml-2">📱 SMS</span>}

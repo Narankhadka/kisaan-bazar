@@ -1,3 +1,4 @@
+import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '../context/LanguageContext';
 
 function Highlight({ text, query }) {
@@ -15,13 +16,25 @@ function Highlight({ text, query }) {
 
 export default function PriceCard({ price, highlight = '' }) {
   const { lang, t } = useLanguage();
+  const navigate = useNavigate();
   const avg = parseFloat(price.avg_price);
   const min = parseFloat(price.min_price);
   const max = parseFloat(price.max_price);
   const cropName = lang === 'en' ? (price.crop?.name_english || price.crop?.name_nepali) : price.crop?.name_nepali;
 
+  const handleClick = () => {
+    const name = price.crop?.name_nepali;
+    if (name) navigate(`/prices?q=${encodeURIComponent(name)}`);
+  };
+
   return (
-    <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 flex flex-col gap-1">
+    <div
+      onClick={handleClick}
+      role="button"
+      tabIndex={0}
+      onKeyDown={e => e.key === 'Enter' && handleClick()}
+      className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 flex flex-col gap-1 cursor-pointer hover:scale-[1.02] hover:shadow-md transition-all duration-150 active:scale-[0.98]"
+    >
       <div className="text-3xl text-center">{price.crop?.emoji || '🌿'}</div>
       <div className="font-semibold text-gray-800 text-center text-sm leading-tight">
         <Highlight text={cropName} query={highlight} />

@@ -1,4 +1,6 @@
-from rest_framework import generics, permissions
+from rest_framework import generics, permissions, status
+from rest_framework.response import Response
+from rest_framework.views import APIView
 from .models import Order
 from .serializers import OrderSerializer, OrderStatusSerializer
 
@@ -43,3 +45,16 @@ class OrderStatusUpdateView(generics.UpdateAPIView):
 
     def get_queryset(self):
         return Order.objects.filter(listing__farmer=self.request.user, is_active=True)
+
+
+class BuyerCancelOrderView(APIView):
+    """DELETE /api/orders/<id>/ — buyer cancels a PENDING order (soft delete)"""
+    permission_classes = (IsBuyer,)
+
+    def delete(self, request, pk):
+        order = generics.get_object_or_404(
+            Order, pk=pk, buyer=request.user, status=Order.Status.PENDING, is_active=True
+        )
+        order.is_active = False
+        order.save()
+        return Response(status=status.HTTP_204_NO_CONTENT)
