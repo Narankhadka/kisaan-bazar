@@ -16,25 +16,40 @@ export default function ListingsPage() {
   const [page, setPage]             = useState(1);
   const [hasNext, setHasNext]       = useState(false);
 
-  const fetchListings = (reset = false, nextPage = null) => {
-    const p = reset ? 1 : (nextPage ?? page);
+  // Filter-triggered fetch (aborted when filters change or component unmounts)
+  useEffect(() => {
+    const controller = new AbortController();
     setLoading(true);
     setError(false);
-    const params = { page: p };
+    const params = { page: 1 };
+    if (district) params.district = district;
+    if (search)   params.crop     = search;
+    api.get('/listings/', { params, signal: controller.signal })
+      .then(({ data }) => {
+        setListings(data.results || []);
+        setHasNext(!!data.next);
+        setPage(1);
+      })
+      .catch(err => { if (err?.code !== 'ERR_CANCELED') setError(true); })
+      .finally(() => setLoading(false));
+    return () => controller.abort();
+  }, [district, search]);
+
+  // Load-more (no abort needed — user triggered, page append)
+  const fetchListings = (nextPage) => {
+    setLoading(true);
+    const params = { page: nextPage };
     if (district) params.district = district;
     if (search)   params.crop     = search;
     api.get('/listings/', { params })
       .then(({ data }) => {
-        setListings(prev => reset ? (data.results || []) : [...prev, ...(data.results || [])]);
+        setListings(prev => [...prev, ...(data.results || [])]);
         setHasNext(!!data.next);
-        if (reset) setPage(1);
-        else setPage(p);
+        setPage(nextPage);
       })
       .catch(() => setError(true))
       .finally(() => setLoading(false));
   };
-
-  useEffect(() => { fetchListings(true); }, [district, search]);
 
   const handleSearch = (e) => {
     e.preventDefault();
@@ -44,9 +59,7 @@ export default function ListingsPage() {
   const handleOrder  = (l) => setOrderListing(l);
   const handleClose  = (ok) => { setOrderListing(null); if (ok) setSuccess(true); };
 
-  const loadMore = () => {
-    fetchListings(false, page + 1);
-  };
+  const loadMore = () => { fetchListings(page + 1); };
 
   return (
     <div className="pb-24 md:pb-10">

@@ -969,19 +969,178 @@ export const nepalMunicipalities = {
   ],
 };
 
+// English names for all 77 Nepal districts
+export const districtEnglishNames = {
+  'ताप्लेजुङ': 'Taplejung',   'पाँचथर': 'Panchthar',      'इलाम': 'Ilam',
+  'झापा': 'Jhapa',             'मोरङ': 'Morang',            'सुनसरी': 'Sunsari',
+  'धनकुटा': 'Dhankuta',        'तेह्रथुम': 'Tehrathum',     'संखुवासभा': 'Sankhuwasabha',
+  'भोजपुर': 'Bhojpur',         'सोलुखुम्बु': 'Solukhumbu',  'ओखलढुंगा': 'Okhaldhunga',
+  'खोटाङ': 'Khotang',          'उदयपुर': 'Udayapur',
+  'सप्तरी': 'Saptari',         'सिरहा': 'Siraha',           'धनुषा': 'Dhanusha',
+  'महोत्तरी': 'Mahottari',     'सर्लाही': 'Sarlahi',        'रौतहट': 'Rautahat',
+  'बारा': 'Bara',               'पर्सा': 'Parsa',
+  'सिन्धुली': 'Sindhuli',      'रामेछाप': 'Ramechhap',      'दोलखा': 'Dolakha',
+  'सिन्धुपाल्चोक': 'Sindhupalchok', 'काभ्रेपलाञ्चोक': 'Kavrepalanchok',
+  'ललितपुर': 'Lalitpur',       'भक्तपुर': 'Bhaktapur',      'काठमाडौं': 'Kathmandu',
+  'नुवाकोट': 'Nuwakot',        'रसुवा': 'Rasuwa',            'धादिङ': 'Dhading',
+  'मकवानपुर': 'Makwanpur',     'चितवन': 'Chitwan',
+  'गोरखा': 'Gorkha',           'लमजुङ': 'Lamjung',           'तनहुँ': 'Tanahun',
+  'कास्की': 'Kaski',            'मनाङ': 'Manang',             'मुस्ताङ': 'Mustang',
+  'म्याग्दी': 'Myagdi',        'पर्वत': 'Parbat',            'बाग्लुङ': 'Baglung',
+  'स्याङजा': 'Syangja',        'नवलपुर': 'Nawalpur',
+  'रुपन्देही': 'Rupandehi',    'कपिलवस्तु': 'Kapilvastu',   'नवलपरासी': 'Nawalparasi',
+  'पाल्पा': 'Palpa',            'गुल्मी': 'Gulmi',            'अर्घाखाँची': 'Arghakhanchi',
+  'प्युठान': 'Pyuthan',        'रोल्पा': 'Rolpa',            'रुकुम पूर्व': 'Rukum East',
+  'दाङ': 'Dang',                'बाँके': 'Banke',             'बर्दिया': 'Bardiya',
+  'डोल्पा': 'Dolpa',            'मुगु': 'Mugu',               'हुम्ला': 'Humla',
+  'जुम्ला': 'Jumla',            'कालिकोट': 'Kalikot',         'दैलेख': 'Dailekh',
+  'जाजरकोट': 'Jajarkot',       'रुकुम पश्चिम': 'Rukum West', 'सल्यान': 'Salyan',
+  'सुर्खेत': 'Surkhet',
+  'कैलाली': 'Kailali',          'कञ्चनपुर': 'Kanchanpur',    'डडेल्धुरा': 'Dadeldhura',
+  'बैतडी': 'Baitadi',           'डोटी': 'Doti',               'अछाम': 'Achham',
+  'बाजुरा': 'Bajura',           'बझाङ': 'Bajhang',            'दार्चुला': 'Darchula',
+};
+
 // Helper: Get municipalities for a district
-export function getMunicipalities(district) {
-  return nepalMunicipalities[district] || [];
+// Returns array of { name_ne, displayName, wards }
+
+// Devanagari consonants → Roman
+const _CONS = {
+  'क':'k','ख':'kh','ग':'g','घ':'gh','ङ':'ng',
+  'च':'ch','छ':'chh','ज':'j','झ':'jh','ञ':'n',
+  'ट':'t','ठ':'th','ड':'d','ढ':'dh','ण':'n',
+  'त':'t','थ':'th','द':'d','ध':'dh','न':'n',
+  'प':'p','फ':'ph','ब':'b','भ':'bh','म':'m',
+  'य':'y','र':'r','ल':'l','व':'v','श':'sh',
+  'ष':'sh','स':'s','ह':'h',
+};
+// Devanagari vowel matras (signs after consonants)
+const _MATRA = {
+  '\u093E':'a',  // ा
+  '\u093F':'i',  // ि
+  '\u0940':'i',  // ी
+  '\u0941':'u',  // ु
+  '\u0942':'u',  // ू
+  '\u0947':'e',  // े
+  '\u0948':'ai', // ै
+  '\u094B':'o',  // ो
+  '\u094C':'au', // ौ
+  '\u0943':'ri', // ृ
+  '\u094D':null, // ् halant — suppress inherent a
+  '\u0902':'n',  // ं anusvara
+  '\u0901':'n',  // ँ chandrabindu
+  '\u0903':'h',  // ः visarga
+};
+// Standalone vowels
+const _VOW = {
+  'अ':'a','आ':'aa','इ':'i','ई':'i','उ':'u','ऊ':'u',
+  'ए':'e','ऐ':'ai','ओ':'o','औ':'au','ऋ':'ri',
+};
+
+function _romanizeWord(word) {
+  const chars = [...word];
+  let out = '';
+  for (let i = 0; i < chars.length; i++) {
+    const ch = chars[i];
+    const next = chars[i + 1];
+    if (_CONS[ch]) {
+      if (next !== undefined && _MATRA[next] !== undefined) {
+        // next char is a vowel sign
+        out += _CONS[ch] + (_MATRA[next] ?? '');
+        i++;
+      } else if (next !== undefined && _CONS[next]) {
+        // next is another consonant — suppress inherent 'a'
+        out += _CONS[ch];
+      } else if (!next || next === ' ') {
+        // word end — suppress inherent 'a'
+        out += _CONS[ch];
+      } else if (_VOW[next]) {
+        // standalone vowel follows
+        out += _CONS[ch] + 'a';
+      } else {
+        out += _CONS[ch] + 'a';
+      }
+    } else if (_VOW[ch]) {
+      out += _VOW[ch];
+    } else if (_MATRA[ch] !== undefined && _MATRA[ch] !== null) {
+      out += _MATRA[ch];
+    }
+    // skip unknown chars silently
+  }
+  return out;
 }
 
-// Helper: Get ward count for a municipality
-export function getWardCount(district, municipalityName) {
-  const municipalities = getMunicipalities(district);
-  const found = municipalities.find(m => m.name === municipalityName);
+function _cap(s) { return s ? s.charAt(0).toUpperCase() + s.slice(1) : s; }
+
+// Municipality type suffixes: Nepali → English
+const _MUNI_TYPE = {
+  'महानगरपालिका':    'Metropolitan City',
+  'उपमहानगरपालिका': 'Sub-metropolitan City',
+  'नगरपालिका':       'Municipality',
+  'गाउँपालिका':      'Rural Municipality',
+};
+
+// Special overrides for well-known cities
+const _MUNI_SPECIAL = {
+  'काठमाडौं महानगरपालिका':  'Kathmandu Metropolitan City',
+  'ललितपुर महानगरपालिका':   'Lalitpur Metropolitan City',
+  'पोखरा महानगरपालिका':     'Pokhara Metropolitan City',
+  'भरतपुर महानगरपालिका':    'Bharatpur Metropolitan City',
+  'बीरगञ्ज महानगरपालिका':   'Birgunj Metropolitan City',
+  'विराटनगर महानगरपालिका':  'Biratnagar Metropolitan City',
+  'धरान उपमहानगरपालिका':    'Dharan Sub-metropolitan City',
+  'इटहरी उपमहानगरपालिका':   'Itahari Sub-metropolitan City',
+  'हेटौँडा उपमहानगरपालिका': 'Hetauda Sub-metropolitan City',
+  'बुटवल उपमहानगरपालिका':   'Butwal Sub-metropolitan City',
+  'नेपालगञ्ज उपमहानगरपालिका': 'Nepalgunj Sub-metropolitan City',
+  'घोराही उपमहानगरपालिका':  'Ghorahi Sub-metropolitan City',
+  'तुलसीपुर उपमहानगरपालिका': 'Tulsipur Sub-metropolitan City',
+  'कोहलपुर उपमहानगरपालिका': 'Kohalpur Sub-metropolitan City',
+  'जनकपुर उपमहानगरपालिका':  'Janakpur Sub-metropolitan City',
+  'विरगञ्ज महानगरपालिका':   'Birgunj Metropolitan City',
+};
+
+/**
+ * Convert a Nepali municipality name to English.
+ * Uses special-case overrides for well-known cities,
+ * then falls back to Devanagari romanisation + English type suffix.
+ */
+export function municipalityToEnglish(nepaliName) {
+  if (_MUNI_SPECIAL[nepaliName]) return _MUNI_SPECIAL[nepaliName];
+  for (const [ne, en] of Object.entries(_MUNI_TYPE)) {
+    if (nepaliName.endsWith(ne)) {
+      const prefix = nepaliName.slice(0, -ne.length).trim();
+      const roman = prefix.split(' ').map(w => _cap(_romanizeWord(w))).join(' ');
+      return roman + ' ' + en;
+    }
+  }
+  return nepaliName; // fallback
+}
+
+export function getMunicipalities(district, lang = 'ne') {
+  return (nepalMunicipalities[district] || []).map(m => {
+    const name_en = municipalityToEnglish(m.name);
+    return {
+      name_ne: m.name,
+      name_en,
+      displayName: lang === 'en' ? name_en : m.name,
+      wards: m.wards,
+    };
+  });
+}
+
+// Helper: Get ward count for a municipality (always keyed by Nepali name)
+export function getWardCount(district, municipalityNameNe) {
+  const list = nepalMunicipalities[district] || [];
+  const found = list.find(m => m.name === municipalityNameNe);
   return found ? found.wards : 9;
 }
 
-// Helper: Get all district names
-export function getDistricts() {
-  return Object.keys(nepalMunicipalities);
+// Helper: Get all districts as { name_ne, name_en, displayName }
+export function getDistricts(lang = 'ne') {
+  return Object.keys(nepalMunicipalities).map(name_ne => ({
+    name_ne,
+    name_en: districtEnglishNames[name_ne] || name_ne,
+    displayName: lang === 'en' ? (districtEnglishNames[name_ne] || name_ne) : name_ne,
+  }));
 }

@@ -168,6 +168,7 @@ function Modal({ title, onClose, children }) {
 
 // ─── Confirm Dialog ───────────────────────────────────────────────────────
 function ConfirmDialog({ message, onConfirm, onCancel, confirmColor = GREEN }) {
+  const { t } = useLanguage();
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center px-4">
       <div className="absolute inset-0 bg-black/40" onClick={onCancel} />
@@ -179,14 +180,14 @@ function ConfirmDialog({ message, onConfirm, onCancel, confirmColor = GREEN }) {
             onClick={onCancel}
             className="flex-1 py-2.5 rounded-xl border border-gray-300 text-gray-600 text-sm font-medium hover:bg-gray-50 transition-colors"
           >
-            रद्द गर्नुस्
+            {t('dash.cancel')}
           </button>
           <button
             onClick={onConfirm}
             className="flex-1 py-2.5 rounded-xl text-white text-sm font-bold hover:opacity-90 transition-opacity"
             style={{ backgroundColor: confirmColor }}
           >
-            ठीक छ
+            {t('dash.ok')}
           </button>
         </div>
       </div>
@@ -196,6 +197,7 @@ function ConfirmDialog({ message, onConfirm, onCancel, confirmColor = GREEN }) {
 
 // ─── Listing Form Modal ───────────────────────────────────────────────────
 function ListingModal({ listing, crops, onClose, onSaved }) {
+  const { t } = useLanguage();
   const [form, setForm] = useState({
     crop_id:      listing?.crop?.id  ?? listing?.crop ?? '',
     quantity_kg:  listing?.quantity_kg  ?? '',
@@ -222,19 +224,19 @@ function ListingModal({ listing, crops, onClose, onSaved }) {
       onClose();
     } catch (err) {
       const d = err.response?.data;
-      setError(typeof d === 'object' ? Object.values(d).flat().join(' ') : 'बाली सुरक्षित गर्न सकिएन।');
+      setError(typeof d === 'object' ? Object.values(d).flat().join(' ') : t('dash.listing_err'));
     } finally {
       setSaving(false);
     }
   };
 
   return (
-    <Modal title={listing ? 'बाली सम्पादन' : 'नयाँ बाली थप्नुस्'} onClose={onClose}>
+    <Modal title={listing ? t('dash.listing_edit_title') : t('dash.listing_add_title')} onClose={onClose}>
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1.5">बाली *</label>
+          <label className="block text-sm font-medium text-gray-700 mb-1.5">{t('dash.crop_label')}</label>
           <select required value={form.crop_id} onChange={e => set('crop_id', e.target.value)} className={INPUT}>
-            <option value="">-- बाली छान्नुस् --</option>
+            <option value="">{t('new.select_crop_ph')}</option>
             {crops.map(c => (
               <option key={c.id} value={c.id}>{c.emoji} {c.name_nepali} ({c.name_english})</option>
             ))}
@@ -243,7 +245,7 @@ function ListingModal({ listing, crops, onClose, onSaved }) {
 
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">परिमाण (kg) *</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">{t('dash.qty_label')}</label>
             <input
               required type="number" min="1"
               value={form.quantity_kg} onChange={e => set('quantity_kg', e.target.value)}
@@ -251,7 +253,7 @@ function ListingModal({ listing, crops, onClose, onSaved }) {
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">मूल्य (रु./kg) *</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">{t('dash.price_label')}</label>
             <input
               required type="number" min="1"
               value={form.asking_price} onChange={e => set('asking_price', e.target.value)}
@@ -261,9 +263,9 @@ function ListingModal({ listing, crops, onClose, onSaved }) {
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1.5">जिल्ला *</label>
+          <label className="block text-sm font-medium text-gray-700 mb-1.5">{t('dash.district_label')}</label>
           <select required value={form.district} onChange={e => set('district', e.target.value)} className={INPUT}>
-            <option value="">-- जिल्ला छान्नुस् --</option>
+            <option value="">{t('new.select_district')}</option>
             {DISTRICTS_BY_PROVINCE.map(p => (
               <optgroup key={p.province} label={p.province}>
                 {p.districts.map(d => <option key={d} value={d}>{d}</option>)}
@@ -273,7 +275,7 @@ function ListingModal({ listing, crops, onClose, onSaved }) {
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1.5">विवरण</label>
+          <label className="block text-sm font-medium text-gray-700 mb-1.5">{t('dash.desc_label')}</label>
           <textarea
             value={form.description} onChange={e => set('description', e.target.value)}
             rows={3} placeholder="बालीको बारेमा थप जानकारी..."
@@ -299,6 +301,7 @@ function ListingModal({ listing, crops, onClose, onSaved }) {
 
 // ─── Alert Form Modal ─────────────────────────────────────────────────────
 function AlertModal({ crops, onClose, onSaved }) {
+  const { t } = useLanguage();
   const [form, setForm] = useState({
     crop: '', threshold_price: '', condition: 'BELOW', via_sms: true, via_email: false,
   });
@@ -322,18 +325,18 @@ function AlertModal({ crops, onClose, onSaved }) {
   };
 
   return (
-    <Modal title="नयाँ मूल्य अलर्ट" onClose={onClose}>
+    <Modal title={t('dash.new_alert')} onClose={onClose}>
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1.5">बाली *</label>
+          <label className="block text-sm font-medium text-gray-700 mb-1.5">{t('dash.crop_label')}</label>
           <select required value={form.crop} onChange={e => set('crop', e.target.value)} className={INPUT}>
-            <option value="">-- बाली छान्नुस् --</option>
+            <option value="">{t('new.select_crop_ph')}</option>
             {crops.map(c => <option key={c.id} value={c.id}>{c.emoji} {c.name_nepali}</option>)}
           </select>
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1.5">थ्रेसहोल्ड मूल्य (रु.) *</label>
+          <label className="block text-sm font-medium text-gray-700 mb-1.5">{t('dash.threshold_label')}</label>
           <input
             required type="number" min="1"
             value={form.threshold_price} onChange={e => set('threshold_price', e.target.value)}
@@ -342,9 +345,9 @@ function AlertModal({ crops, onClose, onSaved }) {
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">अवस्था</label>
+          <label className="block text-sm font-medium text-gray-700 mb-2">{t('dash.condition_label')}</label>
           <div className="flex gap-2">
-            {[['BELOW', '▼ मूल्य घट्दा'], ['ABOVE', '▲ मूल्य बढ्दा']].map(([val, label]) => (
+            {[['BELOW', t('dash.when_falls')], ['ABOVE', t('dash.when_rises')]].map(([val, label]) => (
               <button
                 type="button" key={val}
                 onClick={() => set('condition', val)}
@@ -399,9 +402,12 @@ function OverviewTab({ listings, orders, loadingListings, loadingOrders }) {
   const { t } = useLanguage();
 
   useEffect(() => {
-    api.get('/prices/today/')
+    const controller = new AbortController();
+    api.get('/prices/today/', { signal: controller.signal })
       .then(({ data }) => setPrices(data.results || []))
+      .catch(() => {})
       .finally(() => setLoadingPrices(false));
+    return () => controller.abort();
   }, []);
 
   const totalListings  = listings.length;
@@ -508,19 +514,19 @@ function OverviewTab({ listings, orders, loadingListings, loadingOrders }) {
                   <div>
                     <div className="font-medium text-gray-800 text-sm">{p.crop_name}</div>
                     <div className="text-xs text-gray-500 mt-0.5">
-                      बजार: रु.{p.min_price}–{p.max_price}
+                      {t('dash.market_range')}: {t('currency')}{p.min_price}–{p.max_price}
                     </div>
                   </div>
                   <div className="text-right">
                     <div className="font-bold text-sm" style={{ color: GREEN }}>
-                      रु.{marketAvg.toFixed(0)}/kg
+                      {t('currency')}{marketAvg.toFixed(0)}/kg
                     </div>
                     {diff !== null && (
                       <div
                         className="text-xs font-medium mt-0.5"
                         style={{ color: diff > 0 ? ORANGE : '#16a34a' }}
                       >
-                        तपाईं: रु.{myPrice}{diff > 0 ? ` (+${diff.toFixed(0)} माथि)` : ` (${diff.toFixed(0)} तल)`}
+                        {t('dash.you_label')}: {t('currency')}{myPrice}{diff > 0 ? ` (+${diff.toFixed(0)} ${t('dash.above_label')})` : ` (${diff.toFixed(0)} ${t('dash.below_label')})`}
                       </div>
                     )}
                   </div>
@@ -630,7 +636,7 @@ function ListingsTab({ listings, setListings, loading, crops }) {
               <div className="flex items-center gap-4 text-sm mb-2">
                 <span className="text-gray-600">{parseFloat(l.quantity_kg).toFixed(0)} kg</span>
                 <span className="font-bold" style={{ color: GREEN }}>
-                  रु.{parseFloat(l.asking_price).toFixed(0)}/kg
+                  {t('currency')}{parseFloat(l.asking_price).toFixed(0)}/kg
                 </span>
                 <span
                   className="text-xs px-2 py-0.5 rounded-full font-medium ml-auto"
@@ -832,9 +838,12 @@ function AlertsTab({ crops }) {
   const { t } = useLanguage();
 
   useEffect(() => {
-    api.get('/alerts/my/')
+    const controller = new AbortController();
+    api.get('/alerts/my/', { signal: controller.signal })
       .then(({ data }) => setAlerts(data.results ?? []))
+      .catch(() => {})
       .finally(() => setLoading(false));
+    return () => controller.abort();
   }, []);
 
   const handleDelete = async (id) => {
@@ -884,7 +893,7 @@ function AlertsTab({ crops }) {
                   </div>
                   <div className="flex items-center gap-2 mt-0.5 text-xs text-gray-500">
                     <span style={{ color: a.condition === 'ABOVE' ? ORANGE : '#2563eb', fontWeight: 600 }}>
-                      {a.condition === 'ABOVE' ? '▲' : '▼'} रु.{a.threshold_price}
+                      {a.condition === 'ABOVE' ? '▲' : '▼'} {t('currency')}{a.threshold_price}
                     </span>
                     {a.via_sms   && <span>SMS</span>}
                     {a.via_email && <span>Email</span>}
@@ -1096,13 +1105,18 @@ export default function DashboardPage() {
     if (!user) { navigate('/login'); return; }
     if (user.role !== 'FARMER') return;
 
-    api.get('/crops/').then(({ data }) => setCrops(data.results ?? []));
-    api.get('/listings/my/')
+    const controller = new AbortController();
+    api.get('/crops/', { signal: controller.signal })
+      .then(({ data }) => setCrops(data.results ?? [])).catch(() => {});
+    api.get('/listings/my/', { signal: controller.signal })
       .then(({ data }) => setListings(data.results ?? []))
+      .catch(() => {})
       .finally(() => setLoadingListings(false));
-    api.get('/orders/my/')
+    api.get('/orders/my/', { signal: controller.signal })
       .then(({ data }) => setOrders(data.results ?? []))
+      .catch(() => {})
       .finally(() => setLoadingOrders(false));
+    return () => controller.abort();
   }, [user, authLoading]);
 
   if (authLoading) {

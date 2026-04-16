@@ -141,6 +141,7 @@ function Modal({ title, onClose, children }) {
 
 // ─── Confirm Dialog ───────────────────────────────────────────────────────
 function ConfirmDialog({ message, onConfirm, onCancel, confirmColor = '#dc2626' }) {
+  const { t } = useLanguage();
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center px-4">
       <div className="absolute inset-0 bg-black/40" onClick={onCancel} />
@@ -148,8 +149,8 @@ function ConfirmDialog({ message, onConfirm, onCancel, confirmColor = '#dc2626' 
         <div className="flex justify-center mb-3"><WarningIcon /></div>
         <p className="text-gray-800 font-medium mb-5">{message}</p>
         <div className="flex gap-3">
-          <button onClick={onCancel} className="flex-1 py-2.5 rounded-xl border border-gray-300 text-gray-600 text-sm font-medium hover:bg-gray-50 transition-colors">रद्द गर्नुस्</button>
-          <button onClick={onConfirm} className="flex-1 py-2.5 rounded-xl text-white text-sm font-bold hover:opacity-90 transition-opacity" style={{ backgroundColor: confirmColor }}>ठीक छ</button>
+          <button onClick={onCancel} className="flex-1 py-2.5 rounded-xl border border-gray-300 text-gray-600 text-sm font-medium hover:bg-gray-50 transition-colors">{t('dash.cancel')}</button>
+          <button onClick={onConfirm} className="flex-1 py-2.5 rounded-xl text-white text-sm font-bold hover:opacity-90 transition-opacity" style={{ backgroundColor: confirmColor }}>{t('dash.ok')}</button>
         </div>
       </div>
     </div>
@@ -165,14 +166,17 @@ function OverviewTab({ orders, loadingOrders }) {
   const { t } = useLanguage();
 
   useEffect(() => {
-    api.get('/prices/today/')
+    const controller = new AbortController();
+    api.get('/prices/today/', { signal: controller.signal })
       .then(({ data }) => {
         const sorted = (data.results ?? []).sort(
           (a, b) => parseFloat(a.avg_price) - parseFloat(b.avg_price)
         );
         setPrices(sorted.slice(0, 5));
       })
+      .catch(() => {})
       .finally(() => setLoadingPrices(false));
+    return () => controller.abort();
   }, []);
 
   const total     = orders.length;
@@ -210,11 +214,11 @@ function OverviewTab({ orders, loadingOrders }) {
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-gray-50 text-left text-xs text-gray-500">
-                  <th className="px-4 py-2.5 font-medium">बाली</th>
-                  <th className="px-4 py-2.5 font-medium">किसान</th>
-                  <th className="px-4 py-2.5 font-medium">परिमाण</th>
-                  <th className="px-4 py-2.5 font-medium">अवस्था</th>
-                  <th className="px-4 py-2.5 font-medium">मिति</th>
+                  <th className="px-4 py-2.5 font-medium">{t('dash.crop_col')}</th>
+                  <th className="px-4 py-2.5 font-medium">{t('dash.farmer_col')}</th>
+                  <th className="px-4 py-2.5 font-medium">{t('dash.qty_col')}</th>
+                  <th className="px-4 py-2.5 font-medium">{t('dash.status_col')}</th>
+                  <th className="px-4 py-2.5 font-medium">{t('dash.date_col')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -268,10 +272,10 @@ function OverviewTab({ orders, loadingOrders }) {
                 <span className="text-xl">{p.crop_emoji ?? '🌿'}</span>
                 <div className="flex-1 min-w-0">
                   <div className="font-medium text-gray-800 text-sm truncate">{p.crop_name}</div>
-                  <div className="text-xs text-gray-400">रु.{p.min_price}–{p.max_price}</div>
+                  <div className="text-xs text-gray-400">{t('currency')}{p.min_price}–{p.max_price}</div>
                 </div>
                 <div className="font-bold text-sm flex-shrink-0" style={{ color: GREEN }}>
-                  रु.{parseFloat(p.avg_price).toFixed(0)}/kg
+                  {t('currency')}{parseFloat(p.avg_price).toFixed(0)}/kg
                 </div>
               </div>
             ))}
@@ -282,12 +286,35 @@ function OverviewTab({ orders, loadingOrders }) {
   );
 }
 
+const PAYMENT_STATUS_CFG = {
+  UNPAID: { key: 'pay.status.UNPAID', bg: '#fff7ed', color: '#d97706' },
+  PAID:   { key: 'pay.status.PAID',   bg: '#dcfce7', color: '#16a34a' },
+  FAILED: { key: 'pay.status.FAILED', bg: '#fee2e2', color: '#dc2626' },
+};
+
+function submitEsewaForm(data) {
+  const form = document.createElement('form');
+  form.method = 'POST';
+  form.action = data.esewa_url;
+  Object.keys(data).forEach(key => {
+    if (key === 'esewa_url') return;
+    const input = document.createElement('input');
+    input.type  = 'hidden';
+    input.name  = key;
+    input.value = data[key];
+    form.appendChild(input);
+  });
+  document.body.appendChild(form);
+  form.submit();
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // Tab 2: My Orders
 // ═══════════════════════════════════════════════════════════════════════════
 function MyOrdersTab({ orders, setOrders, loading }) {
   const [filter,  setFilter]  = useState('all');
   const [confirm, setConfirm] = useState(null);
+  const [paying,  setPaying]  = useState(null);  // order id currently being initiated
   const { t } = useLanguage();
 
   const filterKeys = [
@@ -304,6 +331,16 @@ function MyOrdersTab({ orders, setOrders, loading }) {
     await api.delete(`/orders/${id}/`);
     setOrders(prev => prev.filter(o => o.id !== id));
     setConfirm(null);
+  };
+
+  const handlePay = async (orderId) => {
+    setPaying(orderId);
+    try {
+      const { data } = await api.post(`/orders/${orderId}/initiate-payment/`);
+      submitEsewaForm(data);
+    } catch {
+      setPaying(null);
+    }
   };
 
   return (
@@ -350,7 +387,7 @@ function MyOrdersTab({ orders, setOrders, loading }) {
                 <div className="flex items-start justify-between mb-2">
                   <div>
                     <div className="font-bold text-gray-800">
-                      {o.crop_emoji} {o.crop_name ?? `अर्डर #${o.id}`}
+                      {o.crop_emoji} {o.crop_name ?? t('dash.order_num').replace('{n}', o.id)}
                     </div>
                     <div className="text-xs text-gray-500 mt-0.5">
                       {o.farmer_name ?? '—'}
@@ -368,7 +405,7 @@ function MyOrdersTab({ orders, setOrders, loading }) {
                 <div className="flex items-center gap-4 text-sm text-gray-600 mb-2">
                   <span>{parseFloat(o.quantity_kg).toFixed(0)} kg</span>
                   {totalValue && (
-                    <span className="font-medium" style={{ color: GREEN }}>≈ रु.{totalValue}</span>
+                    <span className="font-medium" style={{ color: GREEN }}>≈ {t('currency')}{totalValue}</span>
                   )}
                   <span className="text-gray-400 text-xs ml-auto">
                     {new Date(o.created_at).toLocaleDateString('ne-NP')}
@@ -379,6 +416,21 @@ function MyOrdersTab({ orders, setOrders, loading }) {
                   <p className="text-xs text-gray-400 italic mb-2">"{o.message}"</p>
                 )}
 
+                {/* Payment status badge */}
+                {o.payment_status && o.payment_status !== 'UNPAID' && (() => {
+                  const ps = PAYMENT_STATUS_CFG[o.payment_status];
+                  return ps ? (
+                    <div className="mb-2">
+                      <span
+                        className="text-xs font-bold px-2.5 py-1 rounded-full"
+                        style={{ backgroundColor: ps.bg, color: ps.color }}
+                      >
+                        {t(ps.key)}
+                      </span>
+                    </div>
+                  ) : null;
+                })()}
+
                 {/* ACCEPTED — show contact info prominently */}
                 {o.status === 'ACCEPTED' && o.farmer_phone && (
                   <div
@@ -386,7 +438,7 @@ function MyOrdersTab({ orders, setOrders, loading }) {
                     style={{ backgroundColor: '#f0fdf4', border: '1px solid #bbf7d0' }}
                   >
                     <div>
-                      <div className="text-xs text-green-600 font-medium mb-0.5">किसानले स्वीकार गर्नुभयो!</div>
+                      <div className="text-xs text-green-600 font-medium mb-0.5">{t('dash.farmer_accepted')}</div>
                       <div className="text-sm font-bold text-green-800"><PhoneIcon /> {o.farmer_phone}</div>
                     </div>
                     <a
@@ -394,10 +446,38 @@ function MyOrdersTab({ orders, setOrders, loading }) {
                       className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-white text-xs font-bold"
                       style={{ backgroundColor: GREEN }}
                     >
-                      सम्पर्क
+                      {t('dash.contact_btn')}
                     </a>
                   </div>
                 )}
+
+                {/* ACCEPTED + UNPAID — eSewa pay button */}
+                {o.status === 'ACCEPTED' && (!o.payment_status || o.payment_status === 'UNPAID') && totalValue && (
+                  <button
+                    onClick={() => handlePay(o.id)}
+                    disabled={paying === o.id}
+                    className="w-full mt-1 py-2.5 rounded-xl text-white text-xs font-bold disabled:opacity-60 hover:opacity-90 transition-opacity flex items-center justify-center gap-2"
+                    style={{ backgroundColor: '#60BB46' }}
+                  >
+                    {paying === o.id
+                      ? t('pay.paying')
+                      : t('pay.esewa_amount').replace('{amount}', totalValue)
+                    }
+                  </button>
+                )}
+
+                {/* ACCEPTED + PAID — paid badge */}
+                {o.status === 'ACCEPTED' && o.payment_status === 'PAID' && (() => {
+                  const ps = PAYMENT_STATUS_CFG.PAID;
+                  return (
+                    <div
+                      className="w-full mt-1 py-2.5 rounded-xl text-center text-xs font-bold"
+                      style={{ backgroundColor: ps.bg, color: ps.color }}
+                    >
+                      {t(ps.key)}
+                    </div>
+                  );
+                })()}
 
                 {/* PENDING — cancel button */}
                 {o.status === 'PENDING' && (
@@ -405,7 +485,7 @@ function MyOrdersTab({ orders, setOrders, loading }) {
                     onClick={() => setConfirm({ id: o.id })}
                     className="w-full mt-1 py-2 rounded-xl border border-red-200 text-red-500 text-xs font-medium hover:bg-red-50 transition-colors"
                   >
-                    अर्डर रद्द गर्नुस्
+                    {t('dash.cancel_order_btn')}
                   </button>
                 )}
               </div>
@@ -416,7 +496,7 @@ function MyOrdersTab({ orders, setOrders, loading }) {
 
       {confirm && (
         <ConfirmDialog
-          message="के तपाईं यो अर्डर रद्द गर्न चाहनुहुन्छ?"
+          message={t('dash.cancel_order_confirm')}
           onConfirm={() => handleCancel(confirm.id)}
           onCancel={() => setConfirm(null)}
         />
@@ -431,11 +511,15 @@ function MyOrdersTab({ orders, setOrders, loading }) {
 function SavedTab({ onOrderClick }) {
   const [saved,   setSaved]   = useState([]);
   const [loading, setLoading] = useState(true);
+  const { t } = useLanguage();
 
   useEffect(() => {
-    api.get('/listings/saved/')
+    const controller = new AbortController();
+    api.get('/listings/saved/', { signal: controller.signal })
       .then(({ data }) => setSaved(data.results ?? []))
+      .catch(() => {})
       .finally(() => setLoading(false));
+    return () => controller.abort();
   }, []);
 
   const handleUnsave = async (listingId) => {
@@ -453,18 +537,18 @@ function SavedTab({ onOrderClick }) {
 
   return (
     <div>
-      <h2 className="font-semibold text-gray-800 mb-4">सेभ गरिएका बालीहरू</h2>
+      <h2 className="font-semibold text-gray-800 mb-4">{t('dash.saved_title')}</h2>
       {saved.length === 0 ? (
         <div className="bg-white rounded-2xl border border-gray-100 py-14 text-center">
           <div className="flex justify-center mb-3"><StarIcon /></div>
-          <p className="text-gray-600 font-medium mb-1">कुनै बाली सेभ गरिएको छैन</p>
-          <p className="text-gray-400 text-sm mb-5">बाली हेर्दा बुकमार्क आइकन थिचेर सेभ गर्नुस्।</p>
+          <p className="text-gray-600 font-medium mb-1">{t('dash.no_saved')}</p>
+          <p className="text-gray-400 text-sm mb-5">{t('dash.no_saved_msg')}</p>
           <Link
             to="/listings"
             className="inline-block px-6 py-2.5 rounded-xl text-white text-sm font-bold hover:opacity-90 transition-opacity"
             style={{ backgroundColor: GREEN }}
           >
-            बालीहरू हेर्नुस् →
+            {t('dash.view_listings_btn')}
           </Link>
         </div>
       ) : (
@@ -489,13 +573,13 @@ function SavedTab({ onOrderClick }) {
                   </div>
                   <div className="text-right">
                     <div className="font-bold text-base" style={{ color: GREEN }}>
-                      रु.{parseFloat(listing.asking_price).toFixed(0)}
+                      {t('currency')}{parseFloat(listing.asking_price).toFixed(0)}
                     </div>
-                    <div className="text-xs text-gray-400">प्रति kg</div>
+                    <div className="text-xs text-gray-400">{t('dash.per_kg')}</div>
                   </div>
                 </div>
                 <div className="text-xs text-gray-500 mb-3">
-                  {parseFloat(listing.quantity_kg).toFixed(0)} kg उपलब्ध
+                  {parseFloat(listing.quantity_kg).toFixed(0)} {t('dash.kg_available')}
                   {listing.farmer_name && <span className="ml-2">· {listing.farmer_name}</span>}
                 </div>
                 <div className="flex gap-2">
@@ -504,7 +588,7 @@ function SavedTab({ onOrderClick }) {
                     className="flex-1 py-2 rounded-xl text-white text-xs font-bold hover:opacity-90 transition-opacity"
                     style={{ backgroundColor: ORANGE }}
                   >
-                    अर्डर गर्नुस्
+                    {t('dash.order_btn')}
                   </button>
                   <button
                     onClick={() => handleUnsave(listing.id)}
@@ -617,9 +701,9 @@ function ProfileTab({ user: initialUser }) {
             { label: t('prof.phone'),    value: localUser.phone        ?? '—' },
             { label: t('prof.district'), value: localUser.district     ?? '—' },
             { label: t('prof.email'),    value: localUser.email        ?? '—' },
-            { label: 'नगरपालिका',       value: localUser.municipality ?? '—' },
-            { label: 'व्यापार प्रकार',  value: localUser.business_type ?? '—' },
-            { label: 'सदस्य मिति',      value: localUser.date_joined ? new Date(localUser.date_joined).toLocaleDateString('ne-NP') : '—' },
+            { label: t('dash.municipality_label'),    value: localUser.municipality ?? '—' },
+            { label: t('dash.business_type_label'),   value: localUser.business_type ?? '—' },
+            { label: t('dash.member_since'),           value: localUser.date_joined ? new Date(localUser.date_joined).toLocaleDateString() : '—' },
           ].map(item => (
             <div key={item.label} className="bg-gray-50 rounded-xl p-3">
               <div className="text-gray-400 text-xs mb-0.5">{item.label}</div>
@@ -630,7 +714,7 @@ function ProfileTab({ user: initialUser }) {
 
         {profileOk && (
           <div className="bg-green-50 border border-green-200 rounded-xl px-4 py-2 text-green-700 text-sm mb-3">
-            प्रोफाइल सफलतापूर्वक अपडेट भयो।
+            {t('dash.profile_updated')}
           </div>
         )}
 
@@ -722,6 +806,7 @@ function ProfileTab({ user: initialUser }) {
 // Order Modal (for Saved Tab — place order from saved listing)
 // ═══════════════════════════════════════════════════════════════════════════
 function QuickOrderModal({ listing, onClose, onOrdered }) {
+  const { t } = useLanguage();
   const [form, setForm] = useState({ listing: listing.id, quantity_kg: '', message: '' });
   const [saving, setSaving] = useState(false);
   const [error,  setError]  = useState('');
@@ -749,14 +834,14 @@ function QuickOrderModal({ listing, onClose, onOrdered }) {
         <div>
           <div className="font-bold text-gray-800">{listing.crop?.name_nepali}</div>
           <div className="text-sm font-medium" style={{ color: GREEN }}>
-            रु.{parseFloat(listing.asking_price).toFixed(0)}/kg
+            {t('currency')}{parseFloat(listing.asking_price).toFixed(0)}/kg
           </div>
           <div className="text-xs text-gray-500"><LocationIcon /> {listing.district} · {listing.farmer_name}</div>
         </div>
       </div>
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1.5">परिमाण (kg) *</label>
+          <label className="block text-sm font-medium text-gray-700 mb-1.5">{t('dash.qty_label')}</label>
           <input
             required type="number" min="1"
             value={form.quantity_kg} onChange={e => set('quantity_kg', e.target.value)}
@@ -804,9 +889,12 @@ export default function BuyerDashboardPage() {
     if (!user) { navigate('/login'); return; }
     if (user.role !== 'BUYER') return;
 
-    api.get('/orders/my/')
+    const controller = new AbortController();
+    api.get('/orders/my/', { signal: controller.signal })
       .then(({ data }) => setOrders(data.results ?? []))
+      .catch(() => {})
       .finally(() => setLoadingOrders(false));
+    return () => controller.abort();
   }, [user, authLoading]);
 
   if (authLoading) {

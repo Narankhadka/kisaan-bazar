@@ -64,7 +64,7 @@ class RegisterSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = (
-            "username", "email", "password", "role",
+            "email", "password", "role",
             "full_name", "phone", "district",
             "municipality", "ward_number", "farm_size_ropani",
             "business_type", "main_crops",
@@ -74,6 +74,10 @@ class RegisterSerializer(serializers.ModelSerializer):
 
     def validate_phone(self, value):
         validate_nepal_phone(value)
+        if User.objects.filter(phone=value).exists():
+            raise serializers.ValidationError(
+                "यो फोन नम्बर पहिले नै दर्ता भएको छ।"
+            )
         return value
 
     def validate_district(self, value):
@@ -123,6 +127,8 @@ class RegisterSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         main_crops = validated_data.pop("main_crops", [])
         password = validated_data.pop("password")
+        # Phone number is used as the username for login
+        validated_data["username"] = validated_data["phone"]
         user = User(**validated_data)
         user.set_password(password)
         user.save()
@@ -139,8 +145,9 @@ class UserSerializer(serializers.ModelSerializer):
             "full_name", "phone", "district", "address",
             "municipality", "ward_number", "farm_size_ropani", "business_type",
             "profile_photo", "id_type", "is_id_verified", "is_verified",
+            "is_phone_verified",
         )
-        read_only_fields = ("id", "is_verified", "is_id_verified")
+        read_only_fields = ("id", "is_verified", "is_id_verified", "is_phone_verified")
 
     def validate_phone(self, value):
         validate_nepal_phone(value)
@@ -149,3 +156,20 @@ class UserSerializer(serializers.ModelSerializer):
     def validate_district(self, value):
         validate_district(value)
         return value
+
+
+class AdminUserSerializer(serializers.ModelSerializer):
+    """Extended serializer for admin user management — includes ID photo fields."""
+
+    class Meta:
+        model = User
+        fields = (
+            "id", "username", "email", "role",
+            "full_name", "phone", "district", "address",
+            "municipality", "ward_number", "farm_size_ropani", "business_type",
+            "profile_photo",
+            "id_type", "id_number", "id_front_photo", "id_back_photo",
+            "is_id_verified", "is_verified", "is_phone_verified",
+            "date_joined",
+        )
+        read_only_fields = fields

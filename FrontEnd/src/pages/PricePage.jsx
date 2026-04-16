@@ -28,13 +28,16 @@ export default function PricePage() {
 
   // Fetch whenever committed search term or category changes
   useEffect(() => {
+    const controller = new AbortController();
     setLoading(true);
     const params = { page_size: 100 };
     if (search) params.crop = search;
     if (cat)    params.category = cat;
-    api.get('/prices/today/', { params })
+    api.get('/prices/today/', { params, signal: controller.signal })
       .then(({ data }) => setPrices(data.results || []))
+      .catch(err => { if (err?.code !== 'ERR_CANCELED') setPrices([]); })
       .finally(() => setLoading(false));
+    return () => controller.abort();
   }, [search, cat]);
 
   // Debounce: commit search 600ms after the user stops typing

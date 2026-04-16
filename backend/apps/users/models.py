@@ -30,8 +30,20 @@ class User(AbstractUser):
     id_back_photo = models.ImageField(upload_to="id_photos/", null=True, blank=True)
     is_id_verified = models.BooleanField(default=False)
 
+    # Phone OTP verification
+    phone_otp = models.CharField(max_length=6, blank=True)
+    phone_otp_created_at = models.DateTimeField(null=True, blank=True)
+    is_phone_verified = models.BooleanField(default=False)
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    def save(self, *args, **kwargs):
+        # Superusers must always have role=ADMIN.
+        # This ensures `createsuperuser` never leaves role at the BUYER default.
+        if self.is_superuser and self.role != self.Role.ADMIN:
+            self.role = self.Role.ADMIN
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return f"{self.username} ({self.get_role_display()})"

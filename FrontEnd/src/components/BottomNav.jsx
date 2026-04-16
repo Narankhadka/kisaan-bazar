@@ -90,10 +90,12 @@ export default function BottomNav() {
       </div>
 
       {user?.role === 'FARMER'
-        ? <NavItem to="/dashboard"       icon={<DashboardIcon />} label={t('dash.farmer_title')} active={pathname === '/dashboard'} />
+        ? <NavItem to="/dashboard"       icon={<DashboardIcon />} label={t('dash.farmer_title')}  active={pathname === '/dashboard'} />
         : user?.role === 'BUYER'
-          ? <NavItem to="/buyer-dashboard" icon={<DashboardIcon />} label={t('dash.buyer_title')} active={pathname === '/buyer-dashboard'} />
-          : <NavItem to="/listings"        icon={<ListingsIcon />}  label={t('nav.buy')}          active={pathname === '/listings'} />
+          ? <NavItem to="/buyer-dashboard" icon={<DashboardIcon />} label={t('dash.buyer_title')}  active={pathname === '/buyer-dashboard'} />
+          : user?.role === 'ADMIN'
+            ? <NavItem to="/admin-panel"   icon={<DashboardIcon />} label={t('nav.admin_panel')}   active={pathname === '/admin-panel'} />
+            : <NavItem to="/listings"      icon={<ListingsIcon />}  label={t('nav.buy')}            active={pathname === '/listings'} />
       }
       <NavItem to="/profile" icon={<ProfileIcon />} label={t('nav.profile')} active={pathname === '/profile'} />
     </nav>

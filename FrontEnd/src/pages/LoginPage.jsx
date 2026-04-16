@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
+import api from '../api/axios';
 
 const INPUT = 'w-full border border-gray-300 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-green-600 focus:ring-2 focus:ring-green-100 transition-colors';
 
@@ -32,18 +33,46 @@ export default function LoginPage() {
   const [form, setForm]                 = useState({ username: '', password: '' });
   const [loading, setLoading]           = useState(false);
   const [error, setError]               = useState('');
+  const [pendingVerification, setPendingVerification] = useState(false);
+  const [phoneNotVerified, setPhoneNotVerified] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
   const handleLogin = async (e) => {
     e.preventDefault();
-    setLoading(true); setError('');
+    setLoading(true); setError(''); setPendingVerification(false); setPhoneNotVerified(false);
     try {
-      await login(form.username, form.password);
-      navigate(searchParams.get('next') || '/');
-    } catch {
-      setError(t('login.err_creds'));
+      const me = await login(form.username, form.password);
+      const next = searchParams.get('next');
+      if (next) {
+        navigate(next);
+      } else if (me.role === 'ADMIN') {
+        navigate('/admin-panel');
+      } else if (me.role === 'FARMER') {
+        // Check if phone needs verification
+        if (!me.is_phone_verified) {
+          navigate('/verify-phone');
+        } else {
+          navigate('/dashboard');
+        }
+      } else if (me.role === 'BUYER') {
+        if (!me.is_phone_verified) {
+          navigate('/verify-phone');
+        } else {
+          navigate('/buyer-dashboard');
+        }
+      } else {
+        navigate('/');
+      }
+    } catch (err) {
+      if (err?.response?.status === 403 && err?.response?.data?.error === 'pending_verification') {
+        setPendingVerification(true);
+      } else if (err?.response?.status === 403 && err?.response?.data?.error === 'phone_not_verified') {
+        setPhoneNotVerified(true);
+      } else {
+        setError(t('login.err_creds'));
+      }
     } finally {
       setLoading(false);
     }
@@ -101,9 +130,9 @@ export default function LoginPage() {
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1.5">{t('login.username')}</label>
                 <input
-                  type="text" required autoFocus
+                  type="tel" required autoFocus
                   value={form.username} onChange={e => set('username', e.target.value)}
-                  placeholder={t('login.username')}
+                  placeholder={t('login.username_hint')}
                   className={INPUT}
                 />
               </div>
@@ -126,6 +155,25 @@ export default function LoginPage() {
                   </button>
                 </div>
               </div>
+              {pendingVerification && (
+                <div className="bg-orange-50 border border-orange-300 rounded-xl px-4 py-3 text-sm">
+                  <p className="font-bold text-orange-700 mb-1">{t('login.pending_verification_title')}</p>
+                  <p className="text-orange-600">{t('login.pending_verification_msg')}</p>
+                </div>
+              )}
+              {phoneNotVerified && (
+                <div className="bg-orange-50 border border-orange-300 rounded-xl px-4 py-3 text-sm">
+                  <p className="font-bold text-orange-700 mb-1">{t('login.phone_not_verified_title')}</p>
+                  <p className="text-orange-600 mb-2">{t('login.phone_not_verified_msg')}</p>
+                  <Link
+                    to="/verify-phone"
+                    className="inline-block text-xs font-bold text-white px-3 py-1.5 rounded-lg"
+                    style={{ backgroundColor: '#f97316' }}
+                  >
+                    {t('login.verify_phone_btn')}
+                  </Link>
+                </div>
+              )}
               {error && (
                 <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-2.5 text-red-600 text-sm">
                   {error}

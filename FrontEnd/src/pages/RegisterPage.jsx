@@ -1,8 +1,9 @@
 import { Component, useState, useEffect, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import api from '../api/axios';
-import { getDistricts, getMunicipalities, getWardCount } from '../utils/nepalMunicipalities';
+import { getDistricts, getMunicipalities, getWardCount, districtEnglishNames } from '../utils/nepalMunicipalities';
 import { useAuth } from '../context/AuthContext';
+import { useLanguage } from '../context/LanguageContext';
 
 // ─── Error boundary ───────────────────────────────────────────────────────────
 class ErrorBoundary extends Component {
@@ -24,14 +25,14 @@ class ErrorBoundary extends Component {
                 <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
               </svg>
             </div>
-            <h2 className="text-lg font-bold text-gray-800 mb-2">पृष्ठ लोड हुन सकेन</h2>
+            <h2 className="text-lg font-bold text-gray-800 mb-2">Page failed to load</h2>
             <p className="text-xs text-gray-400 mb-6 font-mono break-all">{this.state.message}</p>
             <button
               onClick={() => window.location.reload()}
               className="px-6 py-2.5 rounded-xl text-white text-sm font-bold"
               style={{ backgroundColor: '#1a6b2e' }}
             >
-              पुनः प्रयास गर्नुस्
+              Try Again
             </button>
           </div>
         </div>
@@ -50,15 +51,21 @@ const ID_TYPES = [
   { value: 'passport',    label: 'राहदानी (Passport)',                   placeholder: 'Pa1234567' },
 ];
 
-const BUSINESS_TYPES = [
-  'व्यक्तिगत', 'होटल-रेस्टुरेन्ट', 'सुपरमार्केट', 'थोक व्यापारी', 'अन्य',
+const BUSINESS_TYPES_NE = [
+  'व्यक्तिगत', 'होटल-रेस्टुरेन्ट', 
+  'सुपरमार्केट', 'थोक व्यापारी', 'अन्य',
+];
+
+const BUSINESS_TYPES_EN = [
+  'Individual', 'Hotel/Restaurant', 
+  'Supermarket', 'Wholesaler', 'Other',
 ];
 
 // ─── Progress bar ────────────────────────────────────────────────────────────
-function ProgressBar({ step, role }) {
+function ProgressBar({ step, role, t }) {
   const steps = role === 'BUYER'
-    ? ['आधारभूत जानकारी', 'स्थान र विवरण']
-    : ['आधारभूत जानकारी', 'स्थान र विवरण', 'फोटो र परिचयपत्र'];
+    ? [t('reg.step1'), t('reg.step2')]
+    : [t('reg.step1'), t('reg.step2'), t('reg.step3')];
   const total = steps.length;
   return (
     <div className="px-6 pt-6 pb-4">
@@ -96,7 +103,7 @@ function ProgressBar({ step, role }) {
           );
         })}
       </div>
-      <p className="text-xs text-gray-400 text-right mt-1">चरण {step} / {total}</p>
+      <p className="text-xs text-gray-400 text-right mt-1">{t('reg.step_n_of', { step, total })}</p>
     </div>
   );
 }
@@ -152,7 +159,6 @@ function FileUploadBox({ label, hint, preview, onChange, accept, shape = 'rect',
               )}
             </div>
             <p className="text-xs text-gray-500 font-medium">{hint}</p>
-            <p className="text-xs text-gray-400 mt-1">क्लिक गर्नुस् वा ड्र्याग गर्नुस्</p>
           </div>
         )}
       </div>
@@ -162,7 +168,7 @@ function FileUploadBox({ label, hint, preview, onChange, accept, shape = 'rect',
           onClick={(e) => { e.stopPropagation(); onChange(null); }}
           className="text-xs text-red-500 mt-1 hover:underline"
         >
-          हटाउनुस्
+          ✕
         </button>
       )}
       {error && <p className={ERROR}>{error}</p>}
@@ -199,7 +205,8 @@ function EyeIcon({ open }) {
 
 function RegisterForm() {
   const navigate = useNavigate();
-  const { loading: authLoading } = useAuth();
+  const { loading: authLoading, login } = useAuth();
+  const { t, lang } = useLanguage();
   const [step, setStep] = useState(1);
   const [success, setSuccess] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -212,7 +219,6 @@ function RegisterForm() {
   const [form, setForm] = useState({
     role: 'FARMER',
     full_name: '',
-    username: '',
     email: '',
     phone: '',
     password: '',
@@ -242,11 +248,15 @@ function RegisterForm() {
   // Clear a single field's error as soon as the user starts correcting it
   const clearError = (key) => setErrors(e => { const n = { ...e }; delete n[key]; return n; });
 
-  const allDistricts = getDistricts();
+  const allDistricts = getDistricts(lang);
   const filteredDistricts = districtSearch.trim()
-    ? allDistricts.filter(d => d.includes(districtSearch.trim()))
+    ? allDistricts.filter(d =>
+        d.displayName.toLowerCase().includes(districtSearch.trim().toLowerCase()) ||
+        d.name_ne.includes(districtSearch.trim()) ||
+        (d.name_en && d.name_en.toLowerCase().includes(districtSearch.trim().toLowerCase()))
+      )
     : allDistricts;
-  const municipalities = form.district ? getMunicipalities(form.district) : [];
+  const municipalities = form.district ? getMunicipalities(form.district, lang) : [];
   const wardCount = form.district && form.municipality
     ? getWardCount(form.district, form.municipality)
     : 0;
@@ -281,26 +291,25 @@ function RegisterForm() {
   // ── Validation ──────────────────────────────────────────────────────────────
   const validateStep1 = () => {
     const e = {};
-    if (!form.full_name.trim())    e.full_name = 'पूरा नाम आवश्यक छ';
-    if (!form.username.trim())     e.username  = 'प्रयोगकर्ता नाम आवश्यक छ';
-    if (!form.email.trim())        e.email     = 'इमेल आवश्यक छ';
-    else if (!/\S+@\S+\.\S+/.test(form.email)) e.email = 'मान्य इमेल राख्नुस्';
-    if (!form.phone.trim())        e.phone     = 'फोन नम्बर आवश्यक छ';
-    else if (!/^(97|98)\d{8}$/.test(form.phone)) e.phone = 'नेपाली मोबाइल नम्बर (98XXXXXXXX)';
-    if (!form.password)            e.password  = 'पासवर्ड आवश्यक छ';
-    else if (form.password.length < 8)         e.password = 'कम्तिमा ८ अक्षर चाहिन्छ';
-    else if (!/[A-Z]/.test(form.password))     e.password = 'कम्तिमा एक ठूलो अक्षर (A-Z) चाहिन्छ';
-    else if (!/\d/.test(form.password))        e.password = 'कम्तिमा एक अंक (0-9) चाहिन्छ';
-    if (form.password !== form.confirm_password) e.confirm_password = 'पासवर्ड मेल खाएन';
+    if (!form.full_name.trim())    e.full_name = t('reg.err_full_name');
+    if (!form.email.trim())        e.email     = t('reg.err_email');
+    else if (!/\S+@\S+\.\S+/.test(form.email)) e.email = t('reg.err_email_invalid');
+    if (!form.phone.trim())        e.phone     = t('reg.err_phone');
+    else if (!/^(97|98)\d{8}$/.test(form.phone)) e.phone = t('reg.err_phone_invalid');
+    if (!form.password)            e.password  = t('reg.err_password');
+    else if (form.password.length < 8)         e.password = t('reg.err_password_short');
+    else if (!/[A-Z]/.test(form.password))     e.password = t('reg.err_password_upper');
+    else if (!/\d/.test(form.password))        e.password = t('reg.err_password_num');
+    if (form.password !== form.confirm_password) e.confirm_password = t('reg.err_confirm');
     setErrors(e);
     return Object.keys(e).length === 0;
   };
 
   const validateStep2 = () => {
     const e = {};
-    if (!form.district)            e.district    = 'जिल्ला छान्नुस्';
-    if (!form.municipality.trim()) e.municipality = 'गाउँपालिका/नगरपालिका आवश्यक छ';
-    if (form.role === 'BUYER' && !form.business_type) e.business_type = 'व्यवसायको प्रकार छान्नुस्';
+    if (!form.district)            e.district    = t('reg.err_district');
+    if (!form.municipality.trim()) e.municipality = t('reg.err_municipality');
+    if (form.role === 'BUYER' && !form.business_type) e.business_type = t('reg.err_business_type');
     setErrors(e);
     return Object.keys(e).length === 0;
   };
@@ -308,8 +317,8 @@ function RegisterForm() {
   const validateStep3 = () => {
     const e = {};
     if (form.role === 'FARMER') {
-      if (!form.id_number.trim())  e.id_number      = 'परिचयपत्र नम्बर आवश्यक छ';
-      if (!files.id_front_photo)   e.id_front_photo = 'परिचयपत्रको अगाडिको फोटो आवश्यक छ';
+      if (!form.id_number.trim())  e.id_number      = t('reg.err_id_number');
+      if (!files.id_front_photo)   e.id_front_photo = t('reg.err_id_front');
     }
     setErrors(e);
     return Object.keys(e).length === 0;
@@ -347,12 +356,24 @@ function RegisterForm() {
 
     try {
       await api.post('/auth/register/', fd);
+      if (form.role === 'BUYER') {
+        // Auto-login and redirect to phone verification
+        try {
+          await login(form.phone, form.password);
+          navigate('/verify-phone');
+        } catch {
+          // If auto-login fails, fall back to login page
+          navigate('/login');
+        }
+        return;
+      }
+      // FARMER: show pending screen (cannot login until admin verifies ID)
       setSuccess(true);
     } catch (err) {
       const d = err.response?.data;
       if (d && typeof d === 'object') {
         setServerErrors(d);
-        const step1Fields = ['username', 'email', 'phone', 'password', 'full_name'];
+        const step1Fields = ['email', 'phone', 'password', 'full_name'];
         const step2Fields = ['district', 'municipality', 'business_type'];
         const keys = Object.keys(d);
         if (keys.some(k => step1Fields.includes(k))) setStep(1);
@@ -376,29 +397,39 @@ function RegisterForm() {
 
   // ── Success state ────────────────────────────────────────────────────────────
   if (success) {
+    const isFarmer = form.role === 'FARMER';
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
         <div className="bg-white rounded-3xl shadow-sm p-10 max-w-sm w-full text-center">
           <div
             className="w-20 h-20 rounded-full flex items-center justify-center text-4xl mx-auto mb-6 animate-bounce"
-            style={{ backgroundColor: '#f0fdf4', border: '3px solid #1a6b2e' }}
+            style={{
+              backgroundColor: isFarmer ? '#fff7ed' : '#f0fdf4',
+              border: `3px solid ${isFarmer ? '#f97316' : '#1a6b2e'}`,
+            }}
           >
-            ✓
+            {isFarmer ? '⏳' : '✓'}
           </div>
-          <h2 className="text-xl font-bold text-gray-800 mb-2">दर्ता सफल भयो!</h2>
-          <p className="text-sm text-gray-500 mb-1">
-            {form.full_name || form.username} जी, स्वागत छ!
+          <h2 className="text-xl font-bold text-gray-800 mb-2">{t('reg.success_title')}</h2>
+          <p className="text-sm text-gray-500 mb-3">
+            {t('reg.success_welcome', { name: form.full_name || form.phone })}
           </p>
-          <p className="text-sm text-gray-500 mb-8">
-            तपाईंको खाता प्रमाणीकरण भइरहेको छ।<br />
-            प्रमाणीकरण पछि सम्पूर्ण सुविधा उपलब्ध हुनेछ।
-          </p>
+          {isFarmer ? (
+            <div className="bg-orange-50 border border-orange-200 rounded-xl px-4 py-3 mb-6 text-left">
+              <p className="text-sm font-bold text-orange-700 mb-1">{t('reg.pending_id_title')}</p>
+              <p className="text-xs text-orange-600">{t('reg.pending_id_msg')}</p>
+            </div>
+          ) : (
+            <p className="text-sm text-gray-500 mb-6">
+              {t('reg.buyer_success')}
+            </p>
+          )}
           <button
             onClick={() => navigate('/login')}
             className="w-full py-3.5 rounded-xl text-white font-bold text-sm hover:opacity-90 transition-opacity"
-            style={{ backgroundColor: '#1a6b2e' }}
+            style={{ backgroundColor: isFarmer ? '#f97316' : '#1a6b2e' }}
           >
-            लगइन गर्नुस् →
+            {t('reg.go_to_login')}
           </button>
         </div>
       </div>
@@ -421,7 +452,7 @@ function RegisterForm() {
             to="/"
             className="flex items-center gap-1.5 text-sm font-medium text-green-200 hover:text-white transition-colors px-3 py-1.5 rounded-lg hover:bg-white/10"
           >
-            ← किसान बजार
+            {t('login.back')}
           </Link>
         </div>
         <div className="flex items-center justify-center w-14 h-14 rounded-full bg-white/20 mb-2 md:mb-4 mx-auto">
@@ -430,13 +461,12 @@ function RegisterForm() {
             <path d="M12 22V10M8 14c1.5-1 3-1.5 4-2M16 14c-1.5-1-3-1.5-4-2"/>
           </svg>
         </div>
-        <h1 className="text-2xl md:text-3xl font-bold">किसान बजार</h1>
+        <h1 className="text-2xl md:text-3xl font-bold">{t('app.name')}</h1>
         <p className="text-green-200 text-sm md:text-base mt-1 md:mt-3 md:max-w-xs">
-          किसान र बजार एकै ठाउँमा।<br />
-          बिचौलिया हटाऊँ, किसानलाई सही मूल्य दिलाऊँ।
+          {t('app.tagline')}
         </p>
         <div className="hidden md:flex flex-col gap-3 mt-8 w-full px-4">
-          {['मुफ्त दर्ता', 'सुरक्षित र विश्वसनीय', 'मोबाइल फ्रेन्डली'].map(text => (
+          {[t('reg.feature_free'), t('reg.feature_secure'), t('reg.feature_mobile')].map(text => (
             <div key={text} className="flex items-center gap-2.5 text-sm text-green-100">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4 flex-shrink-0">
                 <polyline points="20 6 9 17 4 12"/>
@@ -451,22 +481,22 @@ function RegisterForm() {
       <div className="flex-1 px-4 py-6 md:py-8 md:flex md:items-start md:justify-center md:bg-gray-50 md:px-8 overflow-y-auto">
         <div className="bg-white rounded-3xl shadow-sm w-full md:max-w-lg">
 
-          <ProgressBar step={step} role={form.role} />
+          <ProgressBar step={step} role={form.role} t={t} />
 
           <div className="px-6 pb-8">
 
             {/* ── STEP 1 ── */}
             {step === 1 && (
               <div className="flex flex-col gap-4">
-                <h2 className="text-base font-bold text-gray-800 mb-1">आधारभूत जानकारी</h2>
+                <h2 className="text-base font-bold text-gray-800 mb-1">{t('reg.step1')}</h2>
 
                 {/* Role cards */}
                 <div className="grid grid-cols-2 gap-3">
                   {[
                     {
                       value: 'FARMER',
-                      label: 'किसान',
-                      desc: 'बाली बेच्न र मूल्य हेर्न',
+                      label: t('reg.farmer'),
+                      desc: t('reg.farmer_desc'),
                       icon: (
                         <svg className="w-8 h-8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
                           <path d="M4 10h16" />
@@ -478,8 +508,8 @@ function RegisterForm() {
                     },
                     {
                       value: 'BUYER',
-                      label: 'खरिदकर्ता',
-                      desc: 'किसानसँग सीधा किन्न',
+                      label: t('reg.buyer'),
+                      desc: t('reg.buyer_desc'),
                       icon: (
                         <svg className="w-8 h-8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
                           <circle cx="9" cy="21" r="1" />
@@ -508,42 +538,38 @@ function RegisterForm() {
 
                 {/* Full name */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">पूरा नाम <span className="text-red-500">*</span></label>
-                  <input type="text" value={form.full_name} onChange={e => set('full_name', e.target.value)}
-                    placeholder="रामबहादुर थापा" className={INPUT + (fieldError('full_name') ? ' border-red-400' : '')} />
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">{t('reg.full_name')} <span className="text-red-500">*</span></label>
+                  <input type="text" value={form.full_name} onChange={e => { set('full_name', e.target.value); clearError('full_name'); }}
+                    placeholder={lang === 'en' ? 'Ram Bahadur Thapa' : 'रामबहादुर थापा'} className={INPUT + (fieldError('full_name') ? ' border-red-400' : '')} />
                   {fieldError('full_name') && <p className={ERROR}>{fieldError('full_name')}</p>}
-                </div>
-
-                {/* Username */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">प्रयोगकर्ता नाम <span className="text-red-500">*</span></label>
-                  <input type="text" value={form.username} onChange={e => set('username', e.target.value)}
-                    placeholder="rambahadur123" className={INPUT + (fieldError('username') ? ' border-red-400' : '')} />
-                  {fieldError('username') && <p className={ERROR}>{fieldError('username')}</p>}
                 </div>
 
                 {/* Email */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">इमेल <span className="text-red-500">*</span></label>
-                  <input type="email" value={form.email} onChange={e => set('email', e.target.value)}
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">{t('reg.email')}</label>
+                  <input type="email" value={form.email} onChange={e => { set('email', e.target.value); clearError('email'); }}
                     placeholder="name@example.com" className={INPUT + (fieldError('email') ? ' border-red-400' : '')} />
                   {fieldError('email') && <p className={ERROR}>{fieldError('email')}</p>}
                 </div>
 
                 {/* Phone */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">फोन <span className="text-red-500">*</span></label>
-                  <input type="tel" value={form.phone} onChange={e => set('phone', e.target.value)}
-                    placeholder="98XXXXXXXX" maxLength={10} className={INPUT + (fieldError('phone') ? ' border-red-400' : '')} />
-                  {fieldError('phone') && <p className={ERROR}>{fieldError('phone')}</p>}
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">{t('reg.phone')}</label>
+                  <input type="tel" value={form.phone} onChange={e => { set('phone', e.target.value); clearError('phone'); }}
+                    placeholder={t('login.username_hint')} maxLength={10} className={INPUT + (fieldError('phone') ? ' border-red-400' : '')} />
+                  {fieldError('phone') ? (
+                    <p className={ERROR}>{fieldError('phone')}</p>
+                  ) : (
+                    <p className="text-xs text-gray-400 mt-1">{t('reg.phone_hint')}</p>
+                  )}
                 </div>
 
                 {/* Password */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">पासवर्ड <span className="text-red-500">*</span></label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">{t('reg.password')}</label>
                   <div className="relative">
-                    <input type={showPassword ? 'text' : 'password'} value={form.password} onChange={e => set('password', e.target.value)}
-                      placeholder="कम्तिमा ८ अक्षर, १ ठूलो, १ अंक" className={INPUT + ' pr-10' + (fieldError('password') ? ' border-red-400' : '')} />
+                    <input type={showPassword ? 'text' : 'password'} value={form.password} onChange={e => { set('password', e.target.value); clearError('password'); clearError('confirm_password'); }}
+                      placeholder={t('reg.password_hint')} className={INPUT + ' pr-10' + (fieldError('password') ? ' border-red-400' : '')} />
                     <button type="button" onClick={() => setShowPassword(v => !v)} tabIndex={-1}
                       className="absolute inset-y-0 right-3 flex items-center text-gray-400 hover:text-gray-600 transition-colors">
                       <EyeIcon open={showPassword} />
@@ -554,9 +580,9 @@ function RegisterForm() {
                   {form.password && (
                     <div className="flex gap-3 mt-1.5">
                       {[
-                        { ok: form.password.length >= 8, label: '८+ अक्षर' },
-                        { ok: /[A-Z]/.test(form.password), label: 'ठूलो अक्षर' },
-                        { ok: /\d/.test(form.password), label: 'अंक' },
+                        { ok: form.password.length >= 8, label: t('reg.pwd_chars') },
+                        { ok: /[A-Z]/.test(form.password), label: t('reg.pwd_upper') },
+                        { ok: /\d/.test(form.password), label: t('reg.pwd_num') },
                       ].map(h => (
                         <span key={h.label} className={`text-xs ${h.ok ? 'text-green-600' : 'text-gray-400'}`}>
                           {h.ok ? '✓' : '○'} {h.label}
@@ -568,10 +594,10 @@ function RegisterForm() {
 
                 {/* Confirm password */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">पासवर्ड पुन: <span className="text-red-500">*</span></label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">{t('reg.confirm_password')}</label>
                   <div className="relative">
-                    <input type={showConfirmPassword ? 'text' : 'password'} value={form.confirm_password} onChange={e => set('confirm_password', e.target.value)}
-                      placeholder="पासवर्ड दोहोर्याउनुस्" className={INPUT + ' pr-10' + (fieldError('confirm_password') ? ' border-red-400' : '')} />
+                    <input type={showConfirmPassword ? 'text' : 'password'} value={form.confirm_password} onChange={e => { set('confirm_password', e.target.value); clearError('confirm_password'); }}
+                      placeholder={t('reg.confirm_hint')} className={INPUT + ' pr-10' + (fieldError('confirm_password') ? ' border-red-400' : '')} />
                     <button type="button" onClick={() => setShowConfirmPassword(v => !v)} tabIndex={-1}
                       className="absolute inset-y-0 right-3 flex items-center text-gray-400 hover:text-gray-600 transition-colors">
                       <EyeIcon open={showConfirmPassword} />
@@ -583,11 +609,11 @@ function RegisterForm() {
                 <button onClick={handleNext}
                   className="w-full py-3.5 rounded-xl text-white font-bold text-sm mt-2 hover:opacity-90 transition-opacity"
                   style={{ backgroundColor: '#1a6b2e' }}>
-                  अगाडि जानुस् →
+                  {t('reg.next_btn')}
                 </button>
                 <p className="text-center text-sm text-gray-500">
-                  पहिलेनै खाता छ?{' '}
-                  <Link to="/login" className="font-bold hover:underline" style={{ color: '#f97316' }}>लगइन गर्नुस्</Link>
+                  {t('reg.have_account')}{' '}
+                  <Link to="/login" className="font-bold hover:underline" style={{ color: '#f97316' }}>{t('reg.go_login')}</Link>
                 </p>
               </div>
             )}
@@ -595,23 +621,24 @@ function RegisterForm() {
             {/* ── STEP 2 ── */}
             {step === 2 && (
               <div className="flex flex-col gap-4">
-                <h2 className="text-base font-bold text-gray-800 mb-1">स्थान र विवरण</h2>
+                <h2 className="text-base font-bold text-gray-800 mb-1">{t('reg.step2')}</h2>
 
                 {/* ── District — searchable ── */}
                 <div className="relative">
                   <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                    जिल्ला <span className="text-red-500">*</span>
+                    {t('reg.district')}
                   </label>
                   <input
                     type="text"
                     autoComplete="off"
-                    value={form.district || districtSearch}
-                    placeholder={form.district ? '' : 'जिल्ला खोज्नुस् (जस्तै: काठ)'}
+                    value={form.district
+                      ? (lang === 'en' ? (districtEnglishNames[form.district] || form.district) : form.district)
+                      : districtSearch}
+                    placeholder={form.district ? '' : t('reg.district_search')}
                     className={INPUT + (fieldError('district') ? ' border-red-400' : '')}
                     onFocus={() => {
-                      // When refocusing after a district was already picked, let user re-search
                       if (form.district) {
-                        setDistrictSearch(form.district);
+                        setDistrictSearch(lang === 'en' ? (districtEnglishNames[form.district] || form.district) : form.district);
                         set('district', '');
                       }
                       setDistrictOpen(true);
@@ -623,10 +650,8 @@ function RegisterForm() {
                       setDistrictOpen(true);
                     }}
                     onBlur={() => {
-                      // Delay so onMouseDown on dropdown items fires first
                       setTimeout(() => {
                         setDistrictOpen(false);
-                        // If user blurred without selecting, clear the partial search
                         setDistrictSearch(prev => {
                           if (!form.district) return '';
                           return prev;
@@ -634,31 +659,28 @@ function RegisterForm() {
                       }, 150);
                     }}
                   />
-                  {/* Dropdown — only open when districtOpen and no district confirmed yet */}
                   {districtOpen && !form.district && filteredDistricts.length > 0 && (
                     <div className="absolute left-0 right-0 top-full mt-1 border border-gray-200 rounded-xl bg-white shadow-lg max-h-52 overflow-y-auto z-50">
                       {filteredDistricts.map(d => (
                         <button
-                          key={d}
+                          key={d.name_ne}
                           type="button"
-                          // onMouseDown fires before onBlur, so we can pick the value
-                          // before the blur handler closes the dropdown
                           onMouseDown={e => {
-                            e.preventDefault(); // keep focus on input during selection
-                            set('district', d);
+                            e.preventDefault();
+                            set('district', d.name_ne);
                             setDistrictSearch('');
                             setDistrictOpen(false);
                             clearError('district');
                           }}
                           className="w-full text-left px-4 py-2.5 text-sm hover:bg-green-50 hover:text-green-700 transition-colors"
                         >
-                          {d}
+                          {d.displayName}
                         </button>
                       ))}
                     </div>
                   )}
                   {districtOpen && !form.district && districtSearch && filteredDistricts.length === 0 && (
-                    <p className="text-xs text-gray-400 mt-1">"{districtSearch}" — कुनै जिल्ला फेला परेन</p>
+                    <p className="text-xs text-gray-400 mt-1">"{districtSearch}" — {t('reg.no_district')}</p>
                   )}
                   {fieldError('district') && <p className={ERROR}>{fieldError('district')}</p>}
                 </div>
@@ -667,16 +689,16 @@ function RegisterForm() {
                 {form.district && (
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                      गाउँपालिका/नगरपालिका <span className="text-red-500">*</span>
+                      {t('reg.municipality')}
                     </label>
                     <select
                       value={form.municipality}
                       onChange={e => { set('municipality', e.target.value); clearError('municipality'); }}
                       className={INPUT + (fieldError('municipality') ? ' border-red-400' : '')}
                     >
-                      <option value="">-- गाउँपालिका/नगरपालिका छान्नुस् --</option>
+                      <option value="">{t('reg.select_municipality')}</option>
                       {municipalities.map(m => (
-                        <option key={m.name} value={m.name}>{m.name}</option>
+                        <option key={m.name_ne} value={m.name_ne}>{m.displayName}</option>
                       ))}
                     </select>
                     {fieldError('municipality') && <p className={ERROR}>{fieldError('municipality')}</p>}
@@ -686,48 +708,54 @@ function RegisterForm() {
                 {/* ── Ward — appears after municipality confirmed ── */}
                 {form.municipality && wardCount > 0 && (
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1.5">वडा नम्बर</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1.5">{t('reg.ward')}</label>
                     <select
                       value={form.ward_number}
                       onChange={e => set('ward_number', e.target.value)}
                       className={INPUT}
                     >
-                      <option value="">-- वडा छान्नुस् (ऐच्छिक) --</option>
+                      <option value="">{t('reg.select_ward')}</option>
                       {Array.from({ length: wardCount }, (_, i) => i + 1).map(n => (
-                        <option key={n} value={n}>वडा {n}</option>
+                        <option key={n} value={n}>{t('reg.ward_n', { n })}</option>
                       ))}
                     </select>
                   </div>
                 )}
 
-                {/* ── BUYER only: business type ── */}
-                {form.role === 'BUYER' && (
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                      व्यवसायको प्रकार <span className="text-red-500">*</span>
-                    </label>
+               {/* ── BUYER only: business type ── */}
+              {form.role === 'BUYER' && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                     {t('reg.business_type')}
+                           </label>
                     <select
-                      value={form.business_type}
-                      onChange={e => { set('business_type', e.target.value); clearError('business_type'); }}
-                      className={INPUT + (fieldError('business_type') ? ' border-red-400' : '')}
-                    >
-                      <option value="">-- प्रकार छान्नुस् --</option>
-                      {BUSINESS_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
-                    </select>
-                    {fieldError('business_type') && <p className={ERROR}>{fieldError('business_type')}</p>}
-                  </div>
-                )}
-
+              value={form.business_type}
+                onChange={e => { set('business_type', e.target.value); clearError('business_type'); }}
+               className={INPUT + (fieldError('business_type') ? ' border-red-400' : '')}
+                                                     >
+                <option value="">{t('reg.select_business')}</option>
+               {BUSINESS_TYPES_NE.map((ne, i) => (
+              <option key={ne} value={ne}>
+                {lang === 'en' ? BUSINESS_TYPES_EN[i] : ne}
+            </option>
+                    ))}
+                  </select>
+            {fieldError('business_type') && 
+                  <p className={ERROR}>
+              {fieldError('business_type')}
+                 </p>}
+                </div>
+                                )}
                 {/* ── FARMER only: farm size + main crops ── */}
                 {form.role === 'FARMER' && (
                   <>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1.5">खेतको क्षेत्रफल (रोपनीमा)</label>
+                      <label className="block text-sm font-medium text-gray-700 mb-1.5">{t('reg.farm_size')}</label>
                       <input
                         type="number" min="0" step="0.5"
                         value={form.farm_size_ropani}
                         onChange={e => set('farm_size_ropani', e.target.value)}
-                        placeholder="जस्तै: 3.5 (ऐच्छिक)"
+                        placeholder={t('reg.farm_size_hint')}
                         className={INPUT}
                       />
                     </div>
@@ -735,8 +763,8 @@ function RegisterForm() {
                     {crops.length > 0 && (
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                          मुख्य बाली
-                          <span className="text-gray-400 font-normal ml-1">(अधिकतम ५ छान्नुस्)</span>
+                          {t('reg.main_crops')}
+                          <span className="text-gray-400 font-normal ml-1">{t('reg.main_crops_hint')}</span>
                         </label>
                         <div className="flex flex-wrap gap-2 max-h-44 overflow-y-auto p-1">
                           {crops.map(c => {
@@ -760,7 +788,7 @@ function RegisterForm() {
                           })}
                         </div>
                         {form.main_crops.length > 0 && (
-                          <p className="text-xs text-green-600 mt-1">{form.main_crops.length} बाली छानिएको</p>
+                          <p className="text-xs text-green-600 mt-1">{t('reg.crops_selected', { n: form.main_crops.length })}</p>
                         )}
                       </div>
                     )}
@@ -771,13 +799,13 @@ function RegisterForm() {
                   <button onClick={handleBack}
                     className="flex-1 py-3.5 rounded-xl font-bold text-sm border-2 hover:bg-gray-50 transition-colors"
                     style={{ borderColor: '#e5e7eb', color: '#374151' }}>
-                    ← पछाडि
+                    {t('reg.back_btn')}
                   </button>
                   {form.role === 'FARMER' ? (
                     <button onClick={handleNext}
                       className="flex-[2] py-3.5 rounded-xl text-white font-bold text-sm hover:opacity-90 transition-opacity"
                       style={{ backgroundColor: '#1a6b2e' }}>
-                      अगाडि जानुस् →
+                      {t('reg.next_btn')}
                     </button>
                   ) : (
                     <button
@@ -785,7 +813,7 @@ function RegisterForm() {
                       disabled={loading}
                       className="flex-[2] py-3.5 rounded-xl text-white font-bold text-sm hover:opacity-90 transition-opacity disabled:opacity-50"
                       style={{ backgroundColor: '#1a6b2e' }}>
-                      {loading ? 'दर्ता हुँदैछ...' : 'दर्ता गर्नुस् ✓'}
+                      {loading ? t('reg.submitting') : t('reg.submit')}
                     </button>
                   )}
                 </div>
@@ -795,12 +823,12 @@ function RegisterForm() {
             {/* ── STEP 3 ── */}
             {step === 3 && (
               <div className="flex flex-col gap-5">
-                <h2 className="text-base font-bold text-gray-800 mb-1">फोटो र परिचयपत्र</h2>
+                <h2 className="text-base font-bold text-gray-800 mb-1">{t('reg.step3')}</h2>
 
                 {/* Profile photo */}
                 <FileUploadBox
-                  label="प्रोफाइल फोटो (ऐच्छिक)"
-                  hint="jpg, jpeg, png, webp — अधिकतम २MB"
+                  label={t('reg.profile_photo')}
+                  hint={t('reg.photo_hint')}
                   preview={previews.profile_photo}
                   onChange={f => handleFile('profile_photo', f)}
                   accept=".jpg,.jpeg,.png,.webp"
@@ -812,17 +840,17 @@ function RegisterForm() {
                 {/* ID verification */}
                 <div>
                   <h3 className="text-sm font-bold text-gray-700 mb-3">
-                    परिचयपत्र प्रमाणीकरण
+                    {t('reg.id_verification')}
                     {form.role === 'FARMER'
                       ? <span className="text-red-500 ml-1">*</span>
-                      : <span className="text-gray-400 font-normal ml-1">(ऐच्छिक)</span>
+                      : <span className="text-gray-400 font-normal ml-1">{t('reg.id_optional')}</span>
                     }
                   </h3>
 
                   {form.role === 'BUYER' && (
                     <div className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 mb-4">
                       <p className="text-xs text-blue-700 leading-relaxed">
-                        परिचयपत्र दिनुभएमा तपाईंको खाता <strong>Verified</strong> badge पाउनेछ ✓
+                        {t('reg.buyer_id_notice')}
                       </p>
                     </div>
                   )}
@@ -830,18 +858,18 @@ function RegisterForm() {
                   {/* ID type */}
                   <div className="mb-3">
                     <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                      परिचयपत्रको प्रकार
+                      {t('reg.id_type')}
                       {form.role === 'FARMER' && <span className="text-red-500 ml-0.5">*</span>}
                     </label>
                     <select value={form.id_type} onChange={e => set('id_type', e.target.value)} className={INPUT}>
-                      {ID_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+                      {ID_TYPES.map(it => <option key={it.value} value={it.value}>{it.label}</option>)}
                     </select>
                   </div>
 
                   {/* ID number */}
                   <div className="mb-4">
                     <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                      परिचयपत्र नम्बर
+                      {t('reg.id_number')}
                       {form.role === 'FARMER' && <span className="text-red-500 ml-0.5">*</span>}
                     </label>
                     <input type="text" value={form.id_number} onChange={e => set('id_number', e.target.value)}
@@ -853,8 +881,8 @@ function RegisterForm() {
                   {/* ID front */}
                   <div className="mb-3">
                     <FileUploadBox
-                      label="परिचयपत्रको अगाडिको भाग"
-                      hint="परिचयपत्रको अगाडिको भाग खिच्नुस् — jpg, jpeg, png, अधिकतम ५MB"
+                      label={t('reg.id_front')}
+                      hint={t('reg.id_front_hint')}
                       preview={previews.id_front_photo}
                       onChange={f => handleFile('id_front_photo', f)}
                       accept=".jpg,.jpeg,.png"
@@ -865,25 +893,18 @@ function RegisterForm() {
 
                   {/* ID back */}
                   <FileUploadBox
-                    label="परिचयपत्रको पछाडिको भाग (ऐच्छिक)"
-                    hint="परिचयपत्रको पछाडिको भाग खिच्नुस् — jpg, jpeg, png"
+                    label={`${t('reg.id_back')} ${t('reg.id_optional')}`}
+                    hint={t('reg.id_back_hint')}
                     preview={previews.id_back_photo}
                     onChange={f => handleFile('id_back_photo', f)}
                     accept=".jpg,.jpeg,.png"
                   />
-
-                  {/* Security notice */}
-                  <div className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 mt-4">
-                    <p className="text-xs text-blue-700 leading-relaxed">
-                      🔒 तपाईंको परिचयपत्र सुरक्षित राखिनेछ। यो प्रमाणीकरणका लागि मात्र प्रयोग हुनेछ।
-                    </p>
-                  </div>
                 </div>
 
                 {/* Server error fallback */}
                 {Object.keys(serverErrors).length > 0 && !Object.keys(errors).length && (
                   <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3">
-                    <p className="text-xs text-red-600 font-medium mb-1">दर्तामा समस्या आयो:</p>
+                    <p className="text-xs text-red-600 font-medium mb-1">{t('reg.submitting')}</p>
                     {Object.entries(serverErrors).map(([k, v]) => (
                       <p key={k} className="text-xs text-red-600">
                         {Array.isArray(v) ? v.join(', ') : String(v)}
@@ -896,14 +917,14 @@ function RegisterForm() {
                   <button onClick={handleBack}
                     className="flex-1 py-3.5 rounded-xl font-bold text-sm border-2 hover:bg-gray-50 transition-colors"
                     style={{ borderColor: '#e5e7eb', color: '#374151' }}>
-                    ← पछाडि
+                    {t('reg.back_btn')}
                   </button>
                   <button
                     onClick={handleSubmit}
                     disabled={loading}
                     className="flex-[2] py-3.5 rounded-xl text-white font-bold text-sm hover:opacity-90 transition-opacity disabled:opacity-50"
                     style={{ backgroundColor: '#1a6b2e' }}>
-                    {loading ? 'दर्ता हुँदैछ...' : 'दर्ता गर्नुस् ✓'}
+                    {loading ? t('reg.submitting') : t('reg.submit')}
                   </button>
                 </div>
               </div>

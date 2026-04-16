@@ -94,6 +94,31 @@ class SparrowSMS:
             return False
 
 
+def send_otp_sms(phone: str, otp: str) -> bool:
+    """
+    Send OTP SMS for phone verification.
+    If Sparrow SMS is not configured, prints OTP to console for dev/test use.
+
+    Returns:
+        True  — SMS sent (or printed in dev mode).
+        False — empty phone number.
+    """
+    if not phone:
+        logger.warning("send_otp_sms called with empty phone number")
+        return False
+
+    message = f"किसान बजार: तपाईंको OTP कोड {otp} हो। यो १० मिनेटमा म्याद सकिन्छ।"
+    sms = SparrowSMS()
+
+    if sms.is_configured():
+        return sms.send_sms(phone, message)
+
+    # Dev mode: print to console instead of sending real SMS
+    print(f"[DEV OTP] Phone: {phone} | OTP: {otp}")
+    logger.info("[DEV OTP] Phone: %s | OTP: %s", phone, otp)
+    return True
+
+
 def build_price_alert_sms(crop_nepali: str, avg_price, threshold: str) -> str:
     """
     Build the standard Nepali price-alert SMS message.

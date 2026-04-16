@@ -18,6 +18,9 @@ urlpatterns = [
     path("api/listings/", include("apps.listings.urls")),
     path("api/orders/", include("apps.orders.urls")),
     path("api/alerts/", include("apps.alerts.urls")),
+
+    # Admin panel API (IsAdmin only)
+    path("api/admin/", include("apps.scraper.admin_urls")),
 ]
 
 if settings.DEBUG:

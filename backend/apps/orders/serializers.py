@@ -21,13 +21,17 @@ class OrderSerializer(serializers.ModelSerializer):
             "crop_name", "crop_emoji",
             "farmer_name", "farmer_phone", "farmer_district",
             "asking_price",
-            "quantity_kg", "status", "message", "created_at",
+            "quantity_kg", "status", "message",
+            "payment_status", "payment_method", "amount_paid",
+            "created_at",
         )
         read_only_fields = (
             "id", "buyer_name", "buyer_phone",
             "crop_name", "crop_emoji",
             "farmer_name", "farmer_phone", "farmer_district",
-            "asking_price", "status", "created_at",
+            "asking_price", "status",
+            "payment_status", "payment_method", "amount_paid",
+            "created_at",
         )
 
 

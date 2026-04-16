@@ -17,7 +17,7 @@ export default function TopNav() {
   ];
 
   return (
-    <nav className="hidden md:flex items-center justify-between px-8 py-4 bg-white border-b border-gray-200 shadow-sm sticky top-0 z-50">
+    <nav className="hidden md:flex items-center justify-between px-8 py-4 bg-white border-b border-gray-200 shadow-sm sticky top-0 z-[100]">
       {/* Logo */}
       <Link to="/" className="flex items-center gap-2 shrink-0">
         <span className="text-3xl leading-none" style={{ filter: 'sepia(1) saturate(2) hue-rotate(5deg)' }}>🌾</span>
@@ -44,18 +44,20 @@ export default function TopNav() {
       {/* Right: language toggle + auth */}
       <div className="flex items-center gap-3 shrink-0">
         {/* Language toggle */}
-        <div className="flex items-center gap-1 text-sm border border-gray-200 rounded-full px-3 py-1.5">
+        <div className="flex items-center gap-1 text-sm border border-gray-200 rounded-full px-3 py-1.5 relative z-50">
           <button
-            onClick={() => setLang('ne')}
-            className="transition-colors"
+            type="button"
+            onClick={(e) => { e.stopPropagation(); setLang('ne'); }}
+            className="transition-colors cursor-pointer"
             style={{ color: lang === 'ne' ? GREEN : '#9ca3af', fontWeight: lang === 'ne' ? 700 : 400 }}
           >
             नेपाली
           </button>
           <span className="text-gray-300">|</span>
           <button
-            onClick={() => setLang('en')}
-            className="transition-colors"
+            type="button"
+            onClick={(e) => { e.stopPropagation(); setLang('en'); }}
+            className="transition-colors cursor-pointer"
             style={{ color: lang === 'en' ? GREEN : '#9ca3af', fontWeight: lang === 'en' ? 700 : 400 }}
           >
             EN
@@ -95,6 +97,18 @@ export default function TopNav() {
                 }}
               >
                 {t('dash.buyer_title')}
+              </Link>
+            )}
+            {user.role === 'ADMIN' && (
+              <Link
+                to="/admin-panel"
+                className="text-sm font-medium transition-colors hover:opacity-80 pb-0.5"
+                style={{
+                  color: pathname === '/admin-panel' ? GREEN : '#374151',
+                  borderBottom: pathname === '/admin-panel' ? `2px solid ${GREEN}` : '2px solid transparent',
+                }}
+              >
+                {t('nav.admin_panel')}
               </Link>
             )}
             <Link

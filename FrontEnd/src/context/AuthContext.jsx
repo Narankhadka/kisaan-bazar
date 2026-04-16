@@ -5,8 +5,9 @@ import api, { setAccessToken, clearAccessToken } from '../api/axios';
 const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
-  const [user, setUser]       = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [user, setUser]               = useState(null);
+  const [loading, setLoading]         = useState(true);
+  const [phoneWarning, setPhoneWarning] = useState(null); // { hours_remaining: number } | null
 
   // On mount: try to restore the session via the httpOnly refresh cookie.
   // No token in localStorage — the cookie is sent automatically.
@@ -22,7 +23,11 @@ export function AuthProvider({ children }) {
         );
         setAccessToken(refreshData.access);
         const { data: meData } = await api.get('/auth/me/');
-        if (!cancelled) setUser(meData);
+        if (!cancelled) {
+          setUser(meData);
+          // If user is already phone-verified, clear any stale warning
+          if (meData.is_phone_verified) setPhoneWarning(null);
+        }
       } catch {
         // 401 = not logged in (expected on public pages), network error, etc.
         clearAccessToken();
@@ -38,6 +43,11 @@ export function AuthProvider({ children }) {
     const { data } = await api.post('/auth/login/', { username, password });
     // access token in body; refresh token set as httpOnly cookie by server
     setAccessToken(data.access);
+    if (data.warning === 'phone_pending') {
+      setPhoneWarning({ hours_remaining: data.hours_remaining });
+    } else {
+      setPhoneWarning(null);
+    }
     const me = await api.get('/auth/me/');
     setUser(me.data);
     return me.data;
@@ -51,6 +61,7 @@ export function AuthProvider({ children }) {
     }
     clearAccessToken();
     setUser(null);
+    setPhoneWarning(null);
   };
 
   const register = async (formData, username, password) => {
@@ -58,8 +69,10 @@ export function AuthProvider({ children }) {
     return login(username, password);
   };
 
+  const clearPhoneWarning = () => setPhoneWarning(null);
+
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout, register }}>
+    <AuthContext.Provider value={{ user, loading, login, logout, register, phoneWarning, clearPhoneWarning }}>
       {children}
     </AuthContext.Provider>
   );

@@ -1,30 +1,52 @@
+import datetime
+from io import BytesIO
+
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
+from django.utils import timezone
+from PIL import Image
 from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APIClient
 
 from .models import User
 
-REGISTER = "auth-register"
-LOGIN    = "auth-login"
-REFRESH  = "auth-refresh"
-ME       = "auth-me"
+REGISTER   = "auth-register"
+LOGIN      = "auth-login"
+REFRESH    = "auth-refresh"
+ME         = "auth-me"
+SEND_OTP   = "auth-send-otp"
+VERIFY_OTP = "auth-verify-otp"
 
 
 STRONG_PASSWORD = "SecurePass1"   # meets: ≥8 chars, uppercase, digit, not common
 
+def _fake_photo(name="id.jpg"):
+    """Return a valid 1x1 JPEG SimpleUploadedFile for id photo fields."""
+    buf = BytesIO()
+    Image.new("RGB", (1, 1), color=(100, 100, 100)).save(buf, format="JPEG")
+    return SimpleUploadedFile(name, buf.getvalue(), content_type="image/jpeg")
+
+
 def _reg(client, **overrides):
-    """POST a valid registration; override any field via kwargs."""
+    """POST a valid registration; override any field via kwargs.
+    Note: username is no longer a registration field — it is auto-set from phone.
+    """
     data = {
-        "username": "ram",
-        "email":    "ram@example.com",
-        "password": STRONG_PASSWORD,
-        "role":     "FARMER",
-        "phone":    "9800000000",
-        "district": "काठमाडौं",
+        "email":         "ram@example.com",
+        "password":      STRONG_PASSWORD,
+        "role":          "FARMER",
+        "phone":         "9800000000",
+        "district":      "काठमाडौं",
+        "id_front_photo": _fake_photo(),
     }
     data.update(overrides)
-    return client.post(reverse(REGISTER), data)
+    # Remove stale username overrides — not accepted by API anymore
+    data.pop("username", None)
+    # If role is BUYER, remove farmer-only id photo unless explicitly overridden
+    if data.get("role") == "BUYER" and "id_front_photo" not in overrides:
+        data.pop("id_front_photo", None)
+    return client.post(reverse(REGISTER), data, format="multipart")
 
 
 # ---------------------------------------------------------------------------
@@ -37,13 +59,16 @@ class UserRegistrationTest(TestCase):
 
     # happy paths
     def test_farmer_registration(self):
-        resp = _reg(self.client, username="ram_farmer", role="FARMER")
+        resp = _reg(self.client, role="FARMER")
         self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
         self.assertEqual(User.objects.count(), 1)
-        self.assertEqual(User.objects.first().role, "FARMER")
+        u = User.objects.first()
+        self.assertEqual(u.role, "FARMER")
+        # username is auto-set to phone number
+        self.assertEqual(u.username, "9800000000")
 
     def test_buyer_registration(self):
-        resp = _reg(self.client, username="sita_buyer",
+        resp = _reg(self.client,
                     email="sita@example.com", role="BUYER", phone="9811111111")
         self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
 
@@ -59,14 +84,14 @@ class UserRegistrationTest(TestCase):
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("password", resp.data)
 
-    def test_duplicate_username_rejected(self):
-        _reg(self.client)                                           # first user
-        resp = _reg(self.client, email="other@example.com",        # same username
-                    phone="9800000099")
+    def test_duplicate_phone_rejected(self):
+        _reg(self.client)                                    # first: phone=9800000000
+        resp = _reg(self.client, email="other@example.com") # same phone → duplicate
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("phone", resp.data)
 
     def test_missing_required_fields_rejected(self):
-        resp = self.client.post(reverse(REGISTER), {"username": "x"})
+        resp = self.client.post(reverse(REGISTER), {"phone": "9800000000"})
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_invalid_role_value_rejected(self):
@@ -84,7 +109,8 @@ class JWTLoginTest(TestCase):
     def setUp(self):
         self.client = APIClient()
         self.user = User.objects.create_user(
-            username="ram", password="SecurePass1", role="FARMER"
+            username="ram", password="SecurePass1", role="FARMER",
+            is_id_verified=True,   # verified so login is not blocked
         )
 
     def test_login_returns_access_token_in_body(self):
@@ -263,3 +289,164 @@ class PhoneDistrictValidationTest(TestCase):
     def test_valid_district_accepted(self):
         resp = _reg(self.client, username="v7", email="v7@test.com", district="काठमाडौं")
         self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
+
+
+# ---------------------------------------------------------------------------
+# ID Verification — login gate for farmers
+# ---------------------------------------------------------------------------
+
+class IDVerificationLoginTest(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.unverified_farmer = User.objects.create_user(
+            username="unverified_farmer", password="SecurePass1",
+            role="FARMER", is_id_verified=False,
+        )
+        self.verified_farmer = User.objects.create_user(
+            username="verified_farmer", password="SecurePass1",
+            role="FARMER", is_id_verified=True,
+        )
+        self.buyer = User.objects.create_user(
+            username="buyer_user", password="SecurePass1",
+            role="BUYER",
+        )
+
+    def _login(self, username):
+        return self.client.post(reverse(LOGIN), {
+            "username": username, "password": "SecurePass1",
+        })
+
+    def test_unverified_farmer_cannot_login(self):
+        resp = self._login("unverified_farmer")
+        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(resp.data.get("error"), "pending_verification")
+
+    def test_unverified_farmer_gets_nepali_message(self):
+        resp = self._login("unverified_farmer")
+        self.assertIn("message", resp.data)
+        self.assertIn("परिचयपत्र", resp.data["message"])
+
+    def test_verified_farmer_can_login(self):
+        resp = self._login("verified_farmer")
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertIn("access", resp.data)
+
+    def test_buyer_can_login_without_id_verification(self):
+        resp = self._login("buyer_user")
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertIn("access", resp.data)
+
+    def test_verifying_farmer_allows_login(self):
+        """After admin verifies a farmer, they can login."""
+        self.unverified_farmer.is_id_verified = True
+        self.unverified_farmer.save()
+        resp = self._login("unverified_farmer")
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+
+
+# ---------------------------------------------------------------------------
+# Phone OTP verification
+# ---------------------------------------------------------------------------
+
+from django.test.utils import override_settings
+
+_DUMMY_CACHE = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+    }
+}
+
+
+@override_settings(CACHES=_DUMMY_CACHE)
+class OTPVerificationTest(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.user = User.objects.create_user(
+            username="otp_buyer", password="SecurePass1",
+            role="BUYER", phone="9800000001",
+            is_phone_verified=False,
+        )
+        self.client.force_authenticate(user=self.user)
+
+    def test_send_otp_returns_200(self):
+        resp = self.client.post(reverse(SEND_OTP))
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertIn("message", resp.data)
+
+    def test_send_otp_saves_otp_on_user(self):
+        self.client.post(reverse(SEND_OTP))
+        self.user.refresh_from_db()
+        self.assertEqual(len(self.user.phone_otp), 6)
+        self.assertTrue(self.user.phone_otp.isdigit())
+
+    def test_send_otp_dev_mode_true_when_sparrow_not_configured(self):
+        resp = self.client.post(reverse(SEND_OTP))
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertTrue(resp.data.get("dev_mode"))
+
+    def test_verify_otp_correct(self):
+        self.client.post(reverse(SEND_OTP))
+        self.user.refresh_from_db()
+        otp = self.user.phone_otp
+
+        resp = self.client.post(reverse(VERIFY_OTP), {"otp": otp})
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertTrue(resp.data.get("verified"))
+
+        self.user.refresh_from_db()
+        self.assertTrue(self.user.is_phone_verified)
+        self.assertEqual(self.user.phone_otp, "")
+
+    def test_verify_otp_wrong_returns_400(self):
+        self.client.post(reverse(SEND_OTP))
+        resp = self.client.post(reverse(VERIFY_OTP), {"otp": "000000"})
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("OTP गलत छ", resp.data.get("error", ""))
+
+    def test_verify_otp_expired_returns_400(self):
+        self.client.post(reverse(SEND_OTP))
+        self.user.refresh_from_db()
+        # Backdate OTP creation time beyond 10 minutes
+        self.user.phone_otp_created_at = timezone.now() - datetime.timedelta(minutes=11)
+        self.user.save(update_fields=["phone_otp_created_at"])
+
+        resp = self.client.post(reverse(VERIFY_OTP), {"otp": self.user.phone_otp})
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("म्याद", resp.data.get("error", ""))
+
+    def test_unverified_user_after_24hrs_gets_403_on_login(self):
+        # Backdate date_joined beyond 24 hours
+        User.objects.filter(pk=self.user.pk).update(
+            date_joined=timezone.now() - datetime.timedelta(hours=25)
+        )
+        self.client.force_authenticate(user=None)
+        resp = self.client.post(reverse(LOGIN), {
+            "username": "otp_buyer",
+            "password": "SecurePass1",
+        })
+        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(resp.data.get("error"), "phone_not_verified")
+
+    def test_phone_verified_user_login_returns_200(self):
+        self.user.is_phone_verified = True
+        self.user.save()
+        self.client.force_authenticate(user=None)
+        resp = self.client.post(reverse(LOGIN), {
+            "username": "otp_buyer",
+            "password": "SecurePass1",
+        })
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertIn("access", resp.data)
+        self.assertNotIn("warning", resp.data)
+
+    def test_new_unverified_user_login_includes_warning(self):
+        """Newly registered user (< 24h) gets access token + phone_pending warning."""
+        self.client.force_authenticate(user=None)
+        resp = self.client.post(reverse(LOGIN), {
+            "username": "otp_buyer",
+            "password": "SecurePass1",
+        })
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertIn("access", resp.data)
+        self.assertEqual(resp.data.get("warning"), "phone_pending")
+        self.assertIn("hours_remaining", resp.data)

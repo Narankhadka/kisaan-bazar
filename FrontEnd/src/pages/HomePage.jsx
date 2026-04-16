@@ -37,14 +37,16 @@ export default function HomePage() {
   const wrapperRef = useRef(null);
 
   useEffect(() => {
-    api.get('/prices/today/')
+    const controller = new AbortController();
+    api.get('/prices/today/', { signal: controller.signal })
       .then(({ data }) => setPrices(data.results || []))
-      .catch(() => setErrorP(true))
+      .catch(err => { if (err?.code !== 'ERR_CANCELED') setErrorP(true); })
       .finally(() => setLoadingP(false));
-    api.get('/listings/')
+    api.get('/listings/', { signal: controller.signal })
       .then(({ data }) => setListings(data.results || []))
-      .catch(() => setErrorL(true))
+      .catch(err => { if (err?.code !== 'ERR_CANCELED') setErrorL(true); })
       .finally(() => setLoadingL(false));
+    return () => controller.abort();
   }, []);
 
   // "/" keyboard shortcut — focus search bar

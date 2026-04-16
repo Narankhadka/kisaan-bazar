@@ -171,3 +171,10 @@ SPARROW_SMS_TOKEN = env("SPARROW_SMS_TOKEN")
 
 # Kalimati scraper
 KALIMATI_URL = env("KALIMATI_URL")
+
+# eSewa Payment
+ESEWA_MERCHANT_ID  = env("ESEWA_MERCHANT_ID",  default="EPAYTEST")
+ESEWA_SECRET_KEY   = env("ESEWA_SECRET_KEY",   default="8gBm/:&EnhH.1[L")
+ESEWA_URL          = env("ESEWA_URL",          default="https://rc-epay.esewa.com.np")
+ESEWA_SUCCESS_URL  = env("ESEWA_SUCCESS_URL",  default="http://localhost:5173/payment/success")
+ESEWA_FAILURE_URL  = env("ESEWA_FAILURE_URL",  default="http://localhost:5173/payment/failure")
