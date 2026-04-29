@@ -14,7 +14,7 @@ function Highlight({ text, query }) {
   );
 }
 
-export default function PriceCard({ price, highlight = '' }) {
+export default function PriceCard({ price, highlight = '', onClick }) {
   const { lang, t } = useLanguage();
   const navigate = useNavigate();
   const avg = parseFloat(price.avg_price);
@@ -23,6 +23,7 @@ export default function PriceCard({ price, highlight = '' }) {
   const cropName = lang === 'en' ? (price.crop?.name_english || price.crop?.name_nepali) : price.crop?.name_nepali;
 
   const handleClick = () => {
+    if (onClick) { onClick(price); return; }
     const name = price.crop?.name_nepali;
     if (name) navigate(`/prices?q=${encodeURIComponent(name)}`);
   };

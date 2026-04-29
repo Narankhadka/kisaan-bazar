@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import api from '../api/axios';
 import PriceCard from '../components/PriceCard';
+import PriceHistoryChart from '../components/PriceHistoryChart';
 import Spinner from '../components/Spinner';
 import { useLanguage } from '../context/LanguageContext';
 import { toNepaliNum, translateToNepali } from '../utils/searchUtils';
@@ -10,12 +11,13 @@ export default function PricePage() {
   const { lang, t } = useLanguage();
   const [searchParams, setSearchParams] = useSearchParams();
 
-  const [prices, setPrices]     = useState([]);
-  const [loading, setLoading]   = useState(true);
-  const [inputVal, setInputVal] = useState(searchParams.get('q') || '');
+  const [prices, setPrices]             = useState([]);
+  const [loading, setLoading]           = useState(true);
+  const [inputVal, setInputVal]         = useState(searchParams.get('q') || '');
   // `search` is the committed API term (may be translated Nepali)
-  const [search, setSearch]     = useState(() => translateToNepali(searchParams.get('q') || ''));
-  const [cat, setCat]           = useState('');
+  const [search, setSearch]             = useState(() => translateToNepali(searchParams.get('q') || ''));
+  const [cat, setCat]                   = useState('');
+  const [selectedPrice, setSelectedPrice] = useState(null);
 
   const isFirstRender = useRef(true);
 
@@ -149,11 +151,44 @@ export default function PricePage() {
           <>
             <p className="text-xs text-gray-500 mb-3">{resultInfo()}</p>
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
-              {prices.map(p => <PriceCard key={p.id} price={p} highlight={inputVal} />)}
+              {prices.map(p => (
+                <PriceCard key={p.id} price={p} highlight={inputVal} onClick={setSelectedPrice} />
+              ))}
             </div>
           </>
         )}
       </div>
+
+      {/* Price history modal */}
+      {selectedPrice && (
+        <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center">
+          <div className="absolute inset-0 bg-black/40" onClick={() => setSelectedPrice(null)} />
+          <div className="relative bg-white rounded-t-3xl md:rounded-3xl w-full md:max-w-lg max-h-[92vh] overflow-y-auto shadow-2xl modal-slide-up">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 sticky top-0 bg-white rounded-t-3xl md:rounded-t-3xl z-10">
+              <div className="flex items-center gap-2.5">
+                <span className="text-2xl">{selectedPrice.crop?.emoji}</span>
+                <div>
+                  <h3 className="font-bold text-gray-800 leading-tight">
+                    {lang === 'en'
+                      ? (selectedPrice.crop?.name_english || selectedPrice.crop?.name_nepali)
+                      : selectedPrice.crop?.name_nepali}
+                  </h3>
+                  <p className="text-xs text-gray-400">{t('chart.price_history')}</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setSelectedPrice(null)}
+                className="text-gray-400 text-xl w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100 transition-colors"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="px-5 py-4">
+              <PriceHistoryChart cropId={selectedPrice.crop?.id} />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

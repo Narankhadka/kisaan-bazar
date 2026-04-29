@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { LineChart, Line, ResponsiveContainer } from 'recharts';
 import api from '../api/axios';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
@@ -147,6 +148,40 @@ function PhoneIcon() {
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-3 h-3 inline-block">
       <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.61 3.18 2 2 0 0 1 3.6 1h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.6a16 16 0 0 0 5.55 5.55l.96-.96a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/>
     </svg>
+  );
+}
+
+// ─── Price Sparkline (7-day mini chart) ──────────────────────────────────
+function PriceSparkline({ cropId }) {
+  const [data, setData] = useState([]);
+
+  useEffect(() => {
+    if (!cropId) return;
+    const controller = new AbortController();
+    api.get(`/prices/history/${cropId}/`, { params: { page_size: 31 }, signal: controller.signal })
+      .then(({ data: res }) => {
+        const rows = res.results ?? (Array.isArray(res) ? res : []);
+        const sorted = [...rows].sort((a, b) => a.date.localeCompare(b.date)).slice(-7);
+        setData(sorted.map(r => ({ v: parseFloat(r.avg_price) })));
+      })
+      .catch(() => {});
+    return () => controller.abort();
+  }, [cropId]);
+
+  if (data.length < 2) return <div className="w-20 h-9 flex-shrink-0" />;
+
+  return (
+    <div className="flex-shrink-0 w-20 h-9">
+      <ResponsiveContainer width="100%" height="100%">
+        <LineChart data={data}>
+          <Line
+            type="monotone" dataKey="v"
+            stroke="#1a6b2e" strokeWidth={1.5}
+            dot={false} isAnimationActive={false}
+          />
+        </LineChart>
+      </ResponsiveContainer>
+    </div>
   );
 }
 
@@ -417,7 +452,7 @@ function OverviewTab({ listings, orders, loadingListings, loadingOrders }) {
 
   // Match today's prices to farmer's crops
   const farmerCropIds  = [...new Set(listings.map(l => l.crop?.id ?? l.crop))];
-  const relevantPrices = prices.filter(p => farmerCropIds.includes(p.crop));
+  const relevantPrices = prices.filter(p => farmerCropIds.includes(p.crop?.id ?? p.crop));
 
   return (
     <div className="flex flex-col gap-5">
@@ -505,19 +540,22 @@ function OverviewTab({ listings, orders, loadingListings, loadingOrders }) {
         ) : (
           <div className="divide-y divide-gray-50">
             {relevantPrices.map(p => {
-              const myListing   = listings.find(l => (l.crop?.id ?? l.crop) === p.crop);
-              const myPrice     = myListing ? parseFloat(myListing.asking_price) : null;
-              const marketAvg   = parseFloat(p.avg_price);
-              const diff        = myPrice !== null ? myPrice - marketAvg : null;
+              const cropId    = p.crop?.id ?? p.crop;
+              const cropName  = p.crop?.name_nepali ?? p.crop_name;
+              const myListing = listings.find(l => (l.crop?.id ?? l.crop) === cropId);
+              const myPrice   = myListing ? parseFloat(myListing.asking_price) : null;
+              const marketAvg = parseFloat(p.avg_price);
+              const diff      = myPrice !== null ? myPrice - marketAvg : null;
               return (
-                <div key={p.id} className="px-4 py-3.5 flex items-center justify-between">
-                  <div>
-                    <div className="font-medium text-gray-800 text-sm">{p.crop_name}</div>
+                <div key={p.id} className="px-4 py-3 flex items-center gap-3">
+                  <div className="flex-1 min-w-0">
+                    <div className="font-medium text-gray-800 text-sm">{cropName}</div>
                     <div className="text-xs text-gray-500 mt-0.5">
                       {t('dash.market_range')}: {t('currency')}{p.min_price}–{p.max_price}
                     </div>
                   </div>
-                  <div className="text-right">
+                  <PriceSparkline cropId={cropId} />
+                  <div className="text-right flex-shrink-0">
                     <div className="font-bold text-sm" style={{ color: GREEN }}>
                       {t('currency')}{marketAvg.toFixed(0)}/kg
                     </div>

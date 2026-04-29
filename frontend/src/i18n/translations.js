@@ -558,6 +558,16 @@ const ne = {
   'about.tech_title':           'प्रविधि',
   'about.tech_desc':            'हामी कालीमाटी बजारबाट प्रतिदिन बिहान ६ बजे स्वचालित रूपमा मूल्य सङ्कलन गर्छौं र किसान तथा खरिदकर्तासम्म पुर्‍याउँछौं।',
   'about.contact_cta':          'हामीसँग सम्पर्क गर्नुस्',
+
+  // ── Price History Chart ──────────────────────────────────────
+  'chart.price_history': 'मूल्य इतिहास',
+  'chart.avg':           'औसत',
+  'chart.min':           'न्यूनतम',
+  'chart.max':           'अधिकतम',
+  'chart.days_7':        '७ दिन',
+  'chart.days_15':       '१५ दिन',
+  'chart.days_30':       '३० दिन',
+  'chart.empty':         'पर्याप्त डेटा उपलब्ध छैन।',
 };
 
 const en = {
@@ -1120,6 +1130,16 @@ const en = {
   'about.tech_title':           'Technology',
   'about.tech_desc':            'We automatically scrape prices from Kalimati Market every morning at 6 AM and deliver them to farmers and buyers.',
   'about.contact_cta':          'Get in Touch',
+
+  // ── Price History Chart ──────────────────────────────────────
+  'chart.price_history': 'Price History',
+  'chart.avg':           'Avg',
+  'chart.min':           'Min',
+  'chart.max':           'Max',
+  'chart.days_7':        '7 Days',
+  'chart.days_15':       '15 Days',
+  'chart.days_30':       '30 Days',
+  'chart.empty':         'Not enough data available.',
 };
 
 export const translations = { ne, en };
