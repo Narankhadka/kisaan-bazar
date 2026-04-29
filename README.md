@@ -8,15 +8,15 @@ A full-stack web platform that connects Nepali farmers directly with buyers, rem
 
 ---
 
+ 
 ## Demo / Screenshots
-
+ 
 _Screenshots will be added here. The app currently runs locally only._
-
+ 
 | Home (Nepali) | Daily Prices | Listings |
 |---------------|--------------|----------|
-
-_ | _placeholder_ | _placeholder_ |
-
+| _placeholder_ | _placeholder_ | _placeholder_ |
+ 
 | Farmer Dashboard | Admin Panel | Phone OTP |
 |------------------|-------------|-----------|
 | _placeholder_ | _placeholder_ | _placeholder_ |
