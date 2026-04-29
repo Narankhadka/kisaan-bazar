@@ -14,7 +14,8 @@ _Screenshots will be added here. The app currently runs locally only._
 
 | Home (Nepali) | Daily Prices | Listings |
 |---------------|--------------|----------|
-| _placeholder_ | _placeholder_ | _placeholder_ |
+| <img width="3420" height="2146" alt="image" src="https://github.com/user-attachments/assets/890bc726-258c-46e7-9595-caa4dd4339d7" />
+_ | _placeholder_ | _placeholder_ |
 
 | Farmer Dashboard | Admin Panel | Phone OTP |
 |------------------|-------------|-----------|
